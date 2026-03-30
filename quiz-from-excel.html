@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz từ Excel</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg1: #f7f9ff;
+            --bg2: #eef6ff;
+            --card: #ffffff;
+            --text: #112240;
+            --muted: #4a5a78;
+            --accent: #0f62fe;
+            --accent-2: #1f8a70;
+            --border: #d8e2ff;
+            --ok-bg: #e9f9f2;
+            --ok: #136f45;
+            --warn-bg: #fff4e5;
+            --warn: #9b5b00;
+            --error-bg: #ffe9ec;
+            --error: #b42318;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 15% 20%, #dfe9ff 0%, transparent 35%),
+                radial-gradient(circle at 85% 10%, #d8f2ff 0%, transparent 30%),
+                linear-gradient(135deg, var(--bg1), var(--bg2));
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: min(1080px, 92vw);
+            margin: 28px auto 40px;
+        }
+
+        .hero {
+            background: linear-gradient(120deg, #0f62fe, #0e7c86);
+            color: #fff;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 18px 42px rgba(14, 53, 110, 0.25);
+            animation: slideUp 400ms ease-out;
+        }
+
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: clamp(22px, 2.8vw, 36px);
+            line-height: 1.2;
+        }
+
+        .hero p {
+            margin: 0;
+            opacity: 0.95;
+        }
+
+        .toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto auto auto;
+            gap: 10px;
+            margin-top: 16px;
+            align-items: center;
+        }
+
+        .toolbar input[type="file"] {
+            width: 100%;
+            background: #fff;
+            color: #1b2c55;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            padding: 8px;
+        }
+
+        .toolbar select {
+            background: #fff;
+            color: #1b2c55;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            padding: 10px 12px;
+            font-weight: 600;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 120ms ease, opacity 120ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary {
+            background: #fff;
+            color: #0043ce;
+        }
+
+        .btn-success {
+            background: #1f8a70;
+            color: #fff;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .status {
+            margin-top: 14px;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.ok {
+            display: block;
+            background: var(--ok-bg);
+            color: var(--ok);
+        }
+
+        .status.warn {
+            display: block;
+            background: var(--warn-bg);
+            color: var(--warn);
+        }
+
+        .status.error {
+            display: block;
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        .summary {
+            margin-top: 18px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            display: none;
+            animation: slideUp 300ms ease-out;
+        }
+
+        .summary.show {
+            display: block;
+        }
+
+        .flash-controls {
+            margin-top: 14px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            display: none;
+            grid-template-columns: auto auto 1fr;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .flash-controls.show {
+            display: grid;
+        }
+
+        .flash-meta {
+            text-align: right;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .grid {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+        }
+
+        .question-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            animation: fadeIn 320ms ease both;
+        }
+
+        .flashcard {
+            perspective: 1200px;
+            min-height: 280px;
+            cursor: pointer;
+        }
+
+        .flashcard-inner {
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 360ms ease;
+            min-height: 280px;
+        }
+
+        .flashcard-inner.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .flash-face {
+            position: absolute;
+            inset: 0;
+            backface-visibility: hidden;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--card);
+            padding: 18px;
+            box-shadow: 0 10px 20px rgba(20, 40, 80, 0.08);
+        }
+
+        .flash-front {
+            background: linear-gradient(180deg, #ffffff, #f9fbff);
+        }
+
+        .flash-back {
+            transform: rotateY(180deg);
+            background: linear-gradient(180deg, #f7fff9, #eefcf4);
+            overflow: auto;
+        }
+
+        .question-head {
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .q-index {
+            min-width: 30px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .q-main {
+            font-size: 20px;
+            font-weight: 650;
+            margin: 0;
+            line-height: 1.35;
+        }
+
+        .q-vi {
+            color: var(--muted);
+            margin: 6px 0 12px;
+            line-height: 1.45;
+        }
+
+        .options {
+            display: grid;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .option {
+            border: 1px solid #dbe6ff;
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            transition: border-color 160ms ease, background 160ms ease;
+        }
+
+        .option input {
+            margin-top: 3px;
+            accent-color: var(--accent);
+        }
+
+        .option.correct {
+            border-color: #a7f3d0;
+            background: #ecfdf5;
+        }
+
+        .option.wrong {
+            border-color: #fecdd3;
+            background: #fff1f2;
+        }
+
+        .answers {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #345;
+            display: none;
+        }
+
+        .answers.show {
+            display: block;
+        }
+
+        .tiny {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .mt-10 {
+            margin-top: 10px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 760px) {
+            .toolbar {
+                grid-template-columns: 1fr;
+            }
+
+            .flash-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .flash-meta {
+                text-align: left;
+            }
+
+            .q-main {
+                font-size: 18px;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>Quiz động từ Excel</h1>
+            <p>Upload file .xlsx/.xls theo cấu trúc cột trong ảnh để tự động hiển thị câu hỏi, chọn đáp án và chấm điểm.
+            </p>
+
+            <div class="toolbar">
+                <label for="fileInput" class="sr-only">Chọn file Excel</label>
+                <input id="fileInput" type="file" accept=".xlsx,.xls" />
+                <select id="modeSelect" aria-label="Chọn chế độ">
+                    <option value="test">Test</option>
+                    <option value="flashcard">Flashcard</option>
+                </select>
+                <label for="sectionSelect" class="sr-only">Chọn học phần</label>
+                <select id="sectionSelect" aria-label="Chọn học phần" disabled>
+                    <option value="0">Học phần 1 (1-20)</option>
+                </select>
+                <button id="loadBtn" class="btn-primary">Tải dữ liệu</button>
+                <button id="submitBtn" class="btn-success" disabled>Nộp bài</button>
+                <button id="toggleAnswersBtn" class="btn-outline" disabled>Hiện đáp án</button>
+            </div>
+
+            <div id="status" class="status"></div>
+            <div class="tiny mt-10">
+                Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
+                Câu trả lời (Dịch)
+            </div>
+        </section>
+
+        <section id="summary" class="summary"></section>
+        <section id="flashControls" class="flash-controls">
+            <button id="prevCardBtn" class="btn-primary" disabled>Trước</button>
+            <button id="nextCardBtn" class="btn-primary" disabled>Sau</button>
+            <div id="flashMeta" class="flash-meta"></div>
+        </section>
+        <section id="quizContainer" class="grid"></section>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById("fileInput");
+        const modeSelect = document.getElementById("modeSelect");
+        const sectionSelect = document.getElementById("sectionSelect");
+        const loadBtn = document.getElementById("loadBtn");
+        const submitBtn = document.getElementById("submitBtn");
+        const toggleAnswersBtn = document.getElementById("toggleAnswersBtn");
+        const statusEl = document.getElementById("status");
+        const quizContainer = document.getElementById("quizContainer");
+        const summaryEl = document.getElementById("summary");
+        const flashControlsEl = document.getElementById("flashControls");
+        const prevCardBtn = document.getElementById("prevCardBtn");
+        const nextCardBtn = document.getElementById("nextCardBtn");
+        const flashMeta = document.getElementById("flashMeta");
+
+        let quizData = [];
+        let answersVisible = false;
+        let mode = "test";
+        let flashIndex = 0;
+        let flashFlipped = false;
+        let currentSection = 0;
+        let sourceFileName = "";
+
+        const SECTION_SIZE = 20;
+        const STORAGE_KEY = "quiz-from-excel-cache-v1";
+
+        const HEADER_MAP = {
+            originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
+            vietnameseQuestion: ["Câu hỏi (Dịch sang tiếng Việt)", "Question (Dịch sang tiếng Việt)", "Question (Vietnamese translation)"],
+            options: ["Tất cả các option", "All options", "Options"],
+            originalAnswer: ["Câu trả lời gốc", "Original answer", "Answer"],
+            vietnameseAnswer: ["Câu trả lời (Dịch)", "Answer (Dịch)", "Answer (Vietnamese translation)"]
+        };
+
+        function setStatus(type, text) {
+            statusEl.className = "status " + type;
+            statusEl.textContent = text;
+        }
+
+        function normalizeHeader(header) {
+            return String(header || "").trim().toLowerCase();
+        }
+
+        function findHeaderKey(headers, candidates) {
+            const normalized = headers.map(normalizeHeader);
+            for (const candidate of candidates) {
+                const target = normalizeHeader(candidate);
+                const idx = normalized.indexOf(target);
+                if (idx !== -1) return headers[idx];
+            }
+            return null;
+        }
+
+        function splitLines(value) {
+            return String(value || "")
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+        }
+
+        function extractLabel(optionText) {
+            const match = optionText.match(/^([A-Za-z])\s*[.)-]?\s*/);
+            return match ? match[1].toUpperCase() : null;
+        }
+
+        function parseAnswerLabels(answerText) {
+            const labels = new Set();
+            const lines = splitLines(answerText);
+
+            for (const line of lines) {
+                const candidate = line.trim();
+                const onlyLetter = candidate.match(/^([A-Za-z])$/);
+                if (onlyLetter) {
+                    labels.add(onlyLetter[1].toUpperCase());
+                    continue;
+                }
+
+                const fromPrefix = candidate.match(/^([A-Za-z])\s*[.)-]/);
+                if (fromPrefix) {
+                    labels.add(fromPrefix[1].toUpperCase());
+                }
+            }
+
+            return labels;
+        }
+
+        function parseWorkbookRows(rows) {
+            if (!rows.length) return [];
+            const headers = Object.keys(rows[0]);
+
+            const keyOriginalQuestion = findHeaderKey(headers, HEADER_MAP.originalQuestion);
+            const keyVietnameseQuestion = findHeaderKey(headers, HEADER_MAP.vietnameseQuestion);
+            const keyOptions = findHeaderKey(headers, HEADER_MAP.options);
+            const keyOriginalAnswer = findHeaderKey(headers, HEADER_MAP.originalAnswer);
+            const keyVietnameseAnswer = findHeaderKey(headers, HEADER_MAP.vietnameseAnswer);
+
+            if (!keyOriginalQuestion || !keyOptions || !keyOriginalAnswer) {
+                throw new Error(
+                    "Không tìm thấy đủ cột bắt buộc. Cần tối thiểu: Câu hỏi gốc, Tất cả các option, Câu trả lời gốc."
+                );
+            }
+
+            return rows
+                .map((row, index) => {
+                    const options = splitLines(row[keyOptions]);
+                    const answerRaw = row[keyOriginalAnswer] || "";
+                    const answerViRaw = keyVietnameseAnswer ? row[keyVietnameseAnswer] || "" : "";
+                    const answerLabels = parseAnswerLabels(answerRaw);
+
+                    return {
+                        id: index + 1,
+                        originalQuestion: String(row[keyOriginalQuestion] || "").trim(),
+                        vietnameseQuestion: keyVietnameseQuestion ? String(row[keyVietnameseQuestion] || "").trim() : "",
+                        options,
+                        originalAnswer: String(answerRaw || "").trim(),
+                        vietnameseAnswer: String(answerViRaw || "").trim(),
+                        answerLabels
+                    };
+                })
+                .filter((item) => item.originalQuestion && item.options.length);
+        }
+
+        function getSectionsCount() {
+            return Math.max(1, Math.ceil(quizData.length / SECTION_SIZE));
+        }
+
+        function getSectionData() {
+            const start = currentSection * SECTION_SIZE;
+            return quizData.slice(start, start + SECTION_SIZE);
+        }
+
+        function populateSectionSelect() {
+            sectionSelect.innerHTML = "";
+
+            const totalSections = getSectionsCount();
+            for (let i = 0; i < totalSections; i += 1) {
+                const start = i * SECTION_SIZE + 1;
+                const end = Math.min((i + 1) * SECTION_SIZE, quizData.length);
+                const option = document.createElement("option");
+                option.value = String(i);
+                option.textContent = "Học phần " + (i + 1) + " (" + start + "-" + end + ")";
+                sectionSelect.appendChild(option);
+            }
+
+            if (currentSection >= totalSections) {
+                currentSection = 0;
+            }
+
+            sectionSelect.value = String(currentSection);
+            sectionSelect.disabled = quizData.length === 0;
+        }
+
+        function toSerializableQuizData() {
+            return quizData.map((q) => ({
+                id: q.id,
+                originalQuestion: q.originalQuestion,
+                vietnameseQuestion: q.vietnameseQuestion,
+                options: q.options,
+                originalAnswer: q.originalAnswer,
+                vietnameseAnswer: q.vietnameseAnswer,
+                answerLabels: Array.from(q.answerLabels)
+            }));
+        }
+
+        function hydrateQuizData(serialized) {
+            return (serialized || []).map((q) => ({
+                id: q.id,
+                originalQuestion: q.originalQuestion,
+                vietnameseQuestion: q.vietnameseQuestion,
+                options: q.options || [],
+                originalAnswer: q.originalAnswer,
+                vietnameseAnswer: q.vietnameseAnswer,
+                answerLabels: new Set(q.answerLabels || [])
+            }));
+        }
+
+        function saveCache() {
+            if (!quizData.length) return;
+            const payload = {
+                sourceFileName,
+                currentSection,
+                mode,
+                quizData: toSerializableQuizData()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        }
+
+        function tryRestoreCache() {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+
+            try {
+                const parsed = JSON.parse(raw);
+                const restored = hydrateQuizData(parsed.quizData);
+                if (!restored.length) return false;
+
+                quizData = restored;
+                sourceFileName = parsed.sourceFileName || "cache";
+                mode = parsed.mode === "flashcard" ? "flashcard" : "test";
+                modeSelect.value = mode;
+                currentSection = Number.isInteger(parsed.currentSection) ? parsed.currentSection : 0;
+
+                answersVisible = false;
+                flashIndex = 0;
+                flashFlipped = false;
+
+                populateSectionSelect();
+                renderByMode();
+                syncModeUi();
+
+                setStatus("ok", "Đã khôi phục dữ liệu đã tải trước đó" + (sourceFileName ? ": " + sourceFileName : "") + ".");
+                return true;
+            } catch (_) {
+                localStorage.removeItem(STORAGE_KEY);
+                return false;
+            }
+        }
+
+        function renderTestMode() {
+            quizContainer.innerHTML = "";
+            summaryEl.className = "summary";
+            summaryEl.innerHTML = "";
+
+            const sectionData = getSectionData();
+
+            sectionData.forEach((q) => {
+                const card = document.createElement("article");
+                card.className = "question-card";
+
+                const isMulti = q.answerLabels.size > 1;
+                const inputType = isMulti ? "checkbox" : "radio";
+
+                const optionsHtml = q.options
+                    .map((opt, idx) => {
+                        const label = extractLabel(opt);
+                        const inputName = "q-" + q.id;
+                        const inputId = inputName + "-" + idx;
+                        return `
+              <label class="option" data-label="${label || ""}">
+                <input id="${inputId}" name="${inputName}" type="${inputType}" value="${label || opt}" />
+                <span>${opt}</span>
+              </label>
+            `;
+                    })
+                    .join("");
+
+                card.innerHTML = `
+          <div class="question-head">
+            <div class="q-index">#${q.id}</div>
+            <h2 class="q-main">${escapeHtml(q.originalQuestion)}</h2>
+          </div>
+          <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
+          <div class="options">${optionsHtml}</div>
+          <div class="answers ${answersVisible ? "show" : ""}">
+            <strong>Đáp án gốc:</strong> ${escapeHtml(q.originalAnswer || "(trống)")}<br/>
+            <strong>Đáp án dịch:</strong> ${escapeHtml(q.vietnameseAnswer || "(trống)")}
+          </div>
+        `;
+
+                quizContainer.appendChild(card);
+            });
+        }
+
+        function renderFlashcardMode() {
+            quizContainer.innerHTML = "";
+            summaryEl.className = "summary";
+            summaryEl.innerHTML = "";
+
+            const sectionData = getSectionData();
+
+            if (!sectionData.length) return;
+
+            const q = sectionData[flashIndex];
+            const optionList = q.options
+                .map((opt) => "<li>" + escapeHtml(opt) + "</li>")
+                .join("");
+
+            const card = document.createElement("article");
+            card.className = "flashcard";
+            card.innerHTML = `
+        <div class="flashcard-inner ${flashFlipped ? "flipped" : ""}">
+          <div class="flash-face flash-front">
+            <div class="question-head">
+              <div class="q-index">#${q.id}</div>
+              <h2 class="q-main">${escapeHtml(q.originalQuestion)}</h2>
+            </div>
+            <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
+                        <div style="margin-top: 8px;"><strong>Options:</strong></div>
+                        <ul style="margin: 6px 0 0 18px; padding: 0;">${optionList}</ul>
+                        <p class="tiny">Mẹo: Bấm vào thẻ để lật xem đáp án.</p>
+          </div>
+          <div class="flash-face flash-back">
+            <h3 style="margin-top: 0;">Đáp án</h3>
+            <div><strong>Gốc:</strong> ${escapeHtml(q.originalAnswer || "(trống)")}</div>
+            <div style="margin-top: 6px;"><strong>Dịch:</strong> ${escapeHtml(q.vietnameseAnswer || "(trống)")}</div>
+            <div style="margin-top: 10px;"><strong>Options:</strong></div>
+            <ul style="margin: 6px 0 0 18px; padding: 0;">${optionList}</ul>
+          </div>
+        </div>
+      `;
+
+            quizContainer.appendChild(card);
+            flashMeta.textContent = "Thẻ " + (flashIndex + 1) + "/" + sectionData.length + " | " + sectionSelect.options[currentSection].textContent;
+            prevCardBtn.disabled = flashIndex <= 0;
+            nextCardBtn.disabled = flashIndex >= sectionData.length - 1;
+        }
+
+        function renderByMode() {
+            if (!quizData.length) {
+                quizContainer.innerHTML = "";
+                return;
+            }
+
+            if (mode === "flashcard") {
+                renderFlashcardMode();
+            } else {
+                renderTestMode();
+            }
+        }
+
+        function syncModeUi() {
+            const hasData = quizData.length > 0;
+            const isFlash = mode === "flashcard";
+
+            submitBtn.style.display = isFlash ? "none" : "inline-block";
+            toggleAnswersBtn.style.display = isFlash ? "none" : "inline-block";
+            flashControlsEl.classList.toggle("show", isFlash && hasData);
+            sectionSelect.disabled = !hasData;
+
+            if (isFlash) {
+                submitBtn.disabled = true;
+                toggleAnswersBtn.disabled = true;
+            } else {
+                submitBtn.disabled = !hasData;
+                toggleAnswersBtn.disabled = !hasData;
+            }
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function evaluateQuiz() {
+            let score = 0;
+
+            const sectionData = getSectionData();
+
+            sectionData.forEach((q, index) => {
+                const card = quizContainer.children[index];
+                const optionEls = card.querySelectorAll(".option");
+                const selected = new Set();
+
+                optionEls.forEach((optEl) => {
+                    optEl.classList.remove("correct", "wrong");
+                    const input = optEl.querySelector("input");
+                    if (input.checked) {
+                        const label = optEl.getAttribute("data-label");
+                        selected.add(label || input.value);
+                    }
+                });
+
+                const correct = q.answerLabels;
+                const isCorrect = setsAreEqual(selected, correct);
+
+                if (isCorrect) score += 1;
+
+                optionEls.forEach((optEl) => {
+                    const label = optEl.getAttribute("data-label");
+                    const inCorrectSet = correct.has(label);
+                    const input = optEl.querySelector("input");
+
+                    if (inCorrectSet) optEl.classList.add("correct");
+                    if (input.checked && !inCorrectSet) optEl.classList.add("wrong");
+                });
+            });
+
+            const total = sectionData.length;
+            const percent = total ? ((score / total) * 100).toFixed(1) : "0.0";
+
+            summaryEl.className = "summary show";
+            summaryEl.innerHTML = `
+        <h3 style="margin: 0 0 8px;">Kết quả</h3>
+        <div>Điểm: <strong>${score}/${total}</strong> (${percent}%)</div>
+        <div class="tiny" style="margin-top: 6px;">Màu xanh là lựa chọn đúng, màu đỏ là lựa chọn sai bạn đã tick.</div>
+      `;
+        }
+
+        function setsAreEqual(a, b) {
+            if (a.size !== b.size) return false;
+            for (const value of a) {
+                if (!b.has(value)) return false;
+            }
+            return true;
+        }
+
+        async function loadExcelAndRender() {
+            if (!fileInput.files || !fileInput.files.length) {
+                setStatus("warn", "Vui lòng chọn file Excel trước.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: "array" });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+                quizData = parseWorkbookRows(rows);
+                sourceFileName = file.name;
+
+                if (!quizData.length) {
+                    throw new Error("Không có dữ liệu câu hỏi hợp lệ sau khi parse file.");
+                }
+
+                currentSection = 0;
+                answersVisible = false;
+                flashIndex = 0;
+                flashFlipped = false;
+                populateSectionSelect();
+                renderByMode();
+                syncModeUi();
+                saveCache();
+
+                toggleAnswersBtn.textContent = "Hiện đáp án";
+
+                setStatus("ok", "Đã tải thành công " + quizData.length + " câu hỏi từ sheet: " + sheetName + " | File: " + sourceFileName);
+            } catch (error) {
+                setStatus("error", "Lỗi đọc file: " + (error && error.message ? error.message : "Không xác định"));
+                quizContainer.innerHTML = "";
+                summaryEl.className = "summary";
+                summaryEl.innerHTML = "";
+                flashMeta.textContent = "";
+                syncModeUi();
+            }
+        }
+
+        loadBtn.addEventListener("click", loadExcelAndRender);
+
+        sectionSelect.addEventListener("change", () => {
+            currentSection = Number(sectionSelect.value) || 0;
+            flashIndex = 0;
+            flashFlipped = false;
+            answersVisible = false;
+            toggleAnswersBtn.textContent = "Hiện đáp án";
+            renderByMode();
+            saveCache();
+            setStatus("ok", "Đã chuyển sang " + sectionSelect.options[currentSection].textContent + ".");
+        });
+
+        modeSelect.addEventListener("change", () => {
+            mode = modeSelect.value;
+            flashFlipped = false;
+            renderByMode();
+            syncModeUi();
+            saveCache();
+            if (mode === "flashcard") {
+                setStatus("ok", "Đang ở chế độ Flashcard.");
+            } else if (quizData.length) {
+                setStatus("ok", "Đang ở chế độ Test.");
+            }
+        });
+
+        submitBtn.addEventListener("click", () => {
+            if (mode !== "test") return;
+            evaluateQuiz();
+        });
+
+        toggleAnswersBtn.addEventListener("click", () => {
+            answersVisible = !answersVisible;
+            const answers = quizContainer.querySelectorAll(".answers");
+            answers.forEach((el) => {
+                el.classList.toggle("show", answersVisible);
+            });
+            toggleAnswersBtn.textContent = answersVisible ? "Ẩn đáp án" : "Hiện đáp án";
+        });
+
+        prevCardBtn.addEventListener("click", () => {
+            if (flashIndex <= 0) return;
+            flashIndex -= 1;
+            flashFlipped = false;
+            renderFlashcardMode();
+        });
+
+        nextCardBtn.addEventListener("click", () => {
+            const sectionData = getSectionData();
+            if (flashIndex >= sectionData.length - 1) return;
+            flashIndex += 1;
+            flashFlipped = false;
+            renderFlashcardMode();
+        });
+
+        quizContainer.addEventListener("click", () => {
+            if (mode !== "flashcard" || !quizData.length) return;
+            flashFlipped = !flashFlipped;
+            renderFlashcardMode();
+        });
+
+        tryRestoreCache();
+    </script>
+</body>
+
+</html>
