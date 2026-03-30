@@ -436,8 +436,8 @@
         let sourceFileName = "";
 
         const SECTION_SIZE = 20;
-        const STORAGE_KEY = "quiz-from-excel-cache-v1";
-        const DEFAULT_EXCEL_FILE = "FE cô Trà gửi.xlsx";
+        const STORAGE_KEY = "quiz-from-excel-cache-v2";
+        const DEFAULT_EXCEL_FILE = "FE_SWR.xlsx";
 
         const HEADER_MAP = {
             originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
@@ -491,22 +491,63 @@
             return match ? match[1].toUpperCase() : null;
         }
 
-        function parseAnswerLabels(answerText) {
+        function stripOptionPrefix(optionText) {
+            return String(optionText || "").replace(/^([A-Za-z])\s*[.)-]?\s*/, "").trim();
+        }
+
+        function normalizeChoiceText(text) {
+            return String(text || "")
+                .toLowerCase()
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+
+        function getOptionKey(optionText) {
+            const label = extractLabel(optionText);
+            if (label) return label;
+            return "TXT:" + normalizeChoiceText(stripOptionPrefix(optionText));
+        }
+
+        function parseAnswerLabels(answerText, options) {
             const labels = new Set();
             const lines = splitLines(answerText);
 
-            for (const line of lines) {
-                const candidate = line.trim();
-                const onlyLetter = candidate.match(/^([A-Za-z])$/);
-                if (onlyLetter) {
-                    labels.add(onlyLetter[1].toUpperCase());
-                    continue;
-                }
+            const optionByText = new Map();
+            (options || []).forEach((opt) => {
+                const key = getOptionKey(opt);
+                const rawNorm = normalizeChoiceText(opt);
+                const baseNorm = normalizeChoiceText(stripOptionPrefix(opt));
+                optionByText.set(rawNorm, key);
+                optionByText.set(baseNorm, key);
+            });
 
-                const fromPrefix = candidate.match(/^([A-Za-z])\s*[.)-]/);
-                if (fromPrefix) {
-                    labels.add(fromPrefix[1].toUpperCase());
-                }
+            for (const line of lines) {
+                const chunks = String(line)
+                    .split(/[,;|]/)
+                    .map((part) => part.trim())
+                    .filter(Boolean);
+
+                chunks.forEach((chunk) => {
+                    const candidate = chunk.trim();
+
+                    const onlyLetter = candidate.match(/^([A-Za-z])$/);
+                    if (onlyLetter) {
+                        labels.add(onlyLetter[1].toUpperCase());
+                        return;
+                    }
+
+                    const fromPrefix = candidate.match(/^([A-Za-z])\s*[.)-]/);
+                    if (fromPrefix) {
+                        labels.add(fromPrefix[1].toUpperCase());
+                        return;
+                    }
+
+                    const candidateNorm = normalizeChoiceText(candidate);
+                    const matched = optionByText.get(candidateNorm);
+                    if (matched) {
+                        labels.add(matched);
+                    }
+                });
             }
 
             return labels;
@@ -533,7 +574,7 @@
                     const options = splitLines(row[keyOptions]);
                     const answerRaw = row[keyOriginalAnswer] || "";
                     const answerViRaw = keyVietnameseAnswer ? row[keyVietnameseAnswer] || "" : "";
-                    const answerLabels = parseAnswerLabels(answerRaw);
+                    const answerLabels = parseAnswerLabels(answerRaw, options);
 
                     return {
                         id: index + 1,
@@ -660,12 +701,12 @@
 
                 const optionsHtml = q.options
                     .map((opt, idx) => {
-                        const label = extractLabel(opt);
+                        const key = getOptionKey(opt);
                         const inputName = "q-" + q.id;
                         const inputId = inputName + "-" + idx;
                         return `
-              <label class="option" data-label="${label || ""}">
-                <input id="${inputId}" name="${inputName}" type="${inputType}" value="${label || opt}" />
+                            <label class="option" data-key="${escapeHtml(key)}">
+                                <input id="${inputId}" name="${inputName}" type="${inputType}" value="${escapeHtml(key)}" />
                 <span>${opt}</span>
               </label>
             `;
@@ -786,8 +827,8 @@
                     optEl.classList.remove("correct", "wrong");
                     const input = optEl.querySelector("input");
                     if (input.checked) {
-                        const label = optEl.getAttribute("data-label");
-                        selected.add(label || input.value);
+                        const key = optEl.getAttribute("data-key") || input.value;
+                        selected.add(key);
                     }
                 });
 
@@ -797,8 +838,8 @@
                 if (isCorrect) score += 1;
 
                 optionEls.forEach((optEl) => {
-                    const label = optEl.getAttribute("data-label");
-                    const inCorrectSet = correct.has(label);
+                    const key = optEl.getAttribute("data-key");
+                    const inCorrectSet = correct.has(key);
                     const input = optEl.querySelector("input");
 
                     if (inCorrectSet) optEl.classList.add("correct");
