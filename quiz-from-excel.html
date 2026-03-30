@@ -80,6 +80,20 @@
             z-index: 1;
         }
 
+        .stage-reveal {
+            opacity: 0;
+            transform: translateY(18px) scale(0.99);
+            filter: blur(6px);
+            transition: opacity 520ms ease, transform 680ms cubic-bezier(0.22, 1, 0.36, 1), filter 520ms ease;
+            transition-delay: calc(var(--stage-index, 0) * 90ms);
+        }
+
+        body.ready .stage-reveal {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+        }
+
         .hero {
             background:
                 linear-gradient(160deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.12)),
@@ -112,6 +126,16 @@
             gap: 10px;
             margin-top: 16px;
             align-items: center;
+        }
+
+        .toolbar>* {
+            opacity: 0;
+            transform: translateY(10px) scale(0.985);
+        }
+
+        body.ready .toolbar>* {
+            animation: toolbarIn 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: calc(var(--item-index, 0) * 65ms + 120ms);
         }
 
         .toolbar input[type="file"] {
@@ -261,13 +285,31 @@
             box-shadow: var(--shadow);
             -webkit-backdrop-filter: blur(16px) saturate(160%);
             backdrop-filter: blur(16px) saturate(160%);
-            animation: fadeIn 320ms ease both;
+        }
+
+        .stagger-card {
+            opacity: 0;
+            transform: translateY(14px) scale(0.99);
+            animation: cardIn 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: calc(var(--card-index, 0) * 55ms);
         }
 
         .flashcard {
             perspective: 1200px;
             min-height: 280px;
             cursor: pointer;
+        }
+
+        .stagger-flash {
+            opacity: 0;
+            transform: translateY(14px) scale(0.99);
+            animation: cardIn 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        [data-parallax] {
+            transform: translate3d(var(--px, 0px), var(--py, 0px), 0);
+            transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+            will-change: transform;
         }
 
         .flashcard-inner {
@@ -442,6 +484,30 @@
             }
         }
 
+        @keyframes toolbarIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.985);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(14px) scale(0.99);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
         @keyframes slideUp {
             from {
                 opacity: 0;
@@ -458,7 +524,7 @@
 
 <body>
     <div class="container">
-        <section class="hero">
+        <section class="hero stage-reveal" data-parallax="9">
             <h1>Quiz động từ Excel</h1>
             <p>Upload file .xlsx/.xls theo cấu trúc cột trong ảnh để tự động hiển thị câu hỏi, chọn đáp án và chấm điểm.
             </p>
@@ -487,13 +553,13 @@
             </div>
         </section>
 
-        <section id="summary" class="summary"></section>
-        <section id="flashControls" class="flash-controls">
+        <section id="summary" class="summary stage-reveal" data-parallax="6"></section>
+        <section id="flashControls" class="flash-controls stage-reveal" data-parallax="5">
             <button id="prevCardBtn" class="btn-primary" disabled>Trước</button>
             <button id="nextCardBtn" class="btn-primary" disabled>Sau</button>
             <div id="flashMeta" class="flash-meta"></div>
         </section>
-        <section id="quizContainer" class="grid"></section>
+        <section id="quizContainer" class="grid stage-reveal"></section>
     </div>
 
     <script>
@@ -511,6 +577,9 @@
         const prevCardBtn = document.getElementById("prevCardBtn");
         const nextCardBtn = document.getElementById("nextCardBtn");
         const flashMeta = document.getElementById("flashMeta");
+        const heroEl = document.querySelector(".hero");
+        const stageEls = document.querySelectorAll(".stage-reveal");
+        const toolbarItems = document.querySelectorAll(".toolbar > *");
 
         let quizData = [];
         let answersVisible = false;
@@ -777,9 +846,11 @@
 
             const sectionData = getSectionData();
 
-            sectionData.forEach((q) => {
+            sectionData.forEach((q, idx) => {
                 const card = document.createElement("article");
-                card.className = "question-card";
+                card.className = "question-card stagger-card";
+                card.style.setProperty("--card-index", String(idx));
+                card.setAttribute("data-parallax", "3");
 
                 const isMulti = q.answerLabels.size > 1;
                 const inputType = isMulti ? "checkbox" : "radio";
@@ -830,7 +901,8 @@
                 .join("");
 
             const card = document.createElement("article");
-            card.className = "flashcard";
+            card.className = "flashcard stagger-flash";
+            card.setAttribute("data-parallax", "4");
             card.innerHTML = `
         <div class="flashcard-inner ${flashFlipped ? "flipped" : ""}">
           <div class="flash-face flash-front">
@@ -857,6 +929,54 @@
             flashMeta.textContent = "Thẻ " + (flashIndex + 1) + "/" + sectionData.length + " | " + sectionSelect.options[currentSection].textContent;
             prevCardBtn.disabled = flashIndex <= 0;
             nextCardBtn.disabled = flashIndex >= sectionData.length - 1;
+        }
+
+        function initStageReveal() {
+            stageEls.forEach((el, idx) => {
+                el.style.setProperty("--stage-index", String(idx));
+            });
+
+            toolbarItems.forEach((el, idx) => {
+                el.style.setProperty("--item-index", String(idx));
+            });
+
+            requestAnimationFrame(() => {
+                document.body.classList.add("ready");
+            });
+        }
+
+        function initParallax() {
+            const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+            if (reduceMotion || coarsePointer) return;
+
+            let rafId = null;
+            let px = 0;
+            let py = 0;
+
+            const apply = () => {
+                rafId = null;
+                const targets = document.querySelectorAll("[data-parallax]");
+                targets.forEach((el) => {
+                    const depth = Number(el.getAttribute("data-parallax") || 0);
+                    el.style.setProperty("--px", (px * depth).toFixed(2) + "px");
+                    el.style.setProperty("--py", (py * depth).toFixed(2) + "px");
+                });
+            };
+
+            window.addEventListener("mousemove", (event) => {
+                const nx = (event.clientX / window.innerWidth - 0.5) * 2;
+                const ny = (event.clientY / window.innerHeight - 0.5) * 2;
+                px = nx;
+                py = ny;
+                if (!rafId) rafId = requestAnimationFrame(apply);
+            });
+
+            window.addEventListener("mouseleave", () => {
+                px = 0;
+                py = 0;
+                if (!rafId) rafId = requestAnimationFrame(apply);
+            });
         }
 
         function renderByMode() {
@@ -1084,6 +1204,9 @@
             flashFlipped = !flashFlipped;
             renderFlashcardMode();
         });
+
+        initStageReveal();
+        initParallax();
 
         const restoredFromCache = tryRestoreCache();
         if (!restoredFromCache) {
