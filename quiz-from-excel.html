@@ -432,12 +432,9 @@
                     <input id="repoInput" type="text" placeholder="repo" value="Flashcard_Test" />
                     <input id="branchInput" type="text" placeholder="branch" value="main" />
                     <input id="sharedPathInput" type="text" placeholder="duong-dan-json" value="data/quiz-bank.json" />
-                    <input id="tokenInput" type="password" placeholder="github token de luu" />
                     <button id="loadSharedBtn" class="btn-primary">Tai chung</button>
-                    <button id="saveSharedBtn" class="btn-success" disabled>Luu chung</button>
                 </div>
-                <div class="tiny mt-10">Ai co token co quyen ghi vao repo se luu de chung. Nguoi khac bam "Tai chung" de
-                    lay bo cau hoi moi nhat.</div>
+                <div class="tiny mt-10">Bam "Tai chung" de lay bo cau hoi moi nhat tu file JSON trong GitHub repo.</div>
             </div>
             <div class="tiny mt-10">
                 Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
@@ -465,9 +462,7 @@
         const repoInput = document.getElementById("repoInput");
         const branchInput = document.getElementById("branchInput");
         const sharedPathInput = document.getElementById("sharedPathInput");
-        const tokenInput = document.getElementById("tokenInput");
         const loadSharedBtn = document.getElementById("loadSharedBtn");
-        const saveSharedBtn = document.getElementById("saveSharedBtn");
         const statusEl = document.getElementById("status");
         const quizContainer = document.getElementById("quizContainer");
         const summaryEl = document.getElementById("summary");
@@ -487,6 +482,7 @@
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v1";
         const SHARED_CFG_KEY = "quiz-shared-github-config-v1";
+        const DEFAULT_EXCEL_FILE = "FE cô Trà gửi.xlsx";
 
         const HEADER_MAP = {
             originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
@@ -501,18 +497,17 @@
             statusEl.textContent = text;
         }
 
-        function getSharedConfig(includeToken) {
+        function getSharedConfig() {
             return {
                 owner: ownerInput.value.trim(),
                 repo: repoInput.value.trim(),
                 branch: branchInput.value.trim() || "main",
-                path: sharedPathInput.value.trim() || "data/quiz-bank.json",
-                token: includeToken ? tokenInput.value.trim() : ""
+                path: sharedPathInput.value.trim() || "data/quiz-bank.json"
             };
         }
 
         function saveSharedConfig() {
-            const cfg = getSharedConfig(false);
+            const cfg = getSharedConfig();
             localStorage.setItem(SHARED_CFG_KEY, JSON.stringify(cfg));
         }
 
@@ -529,21 +524,6 @@
             } catch (_) {
                 localStorage.removeItem(SHARED_CFG_KEY);
             }
-        }
-
-        function encodePath(path) {
-            return path.split("/").map((part) => encodeURIComponent(part)).join("/");
-        }
-
-        function textToBase64(text) {
-            const bytes = new TextEncoder().encode(text);
-            let binary = "";
-            const chunkSize = 0x8000;
-            for (let i = 0; i < bytes.length; i += chunkSize) {
-                const chunk = bytes.subarray(i, i + chunkSize);
-                binary += String.fromCharCode(...chunk);
-            }
-            return btoa(binary);
         }
 
         function applyLoadedQuizData(message) {
@@ -848,7 +828,6 @@
             toggleAnswersBtn.style.display = isFlash ? "none" : "inline-block";
             flashControlsEl.classList.toggle("show", isFlash && hasData);
             sectionSelect.disabled = !hasData;
-
             if (isFlash) {
                 submitBtn.disabled = true;
                 toggleAnswersBtn.disabled = true;
@@ -930,124 +909,10 @@
 
             try {
                 const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: "array" });
-                const sheetName = workbook.SheetNames[0];
-                const sheet = workbook.Sheets[sheetName];
-                const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-                quizData = parseWorkbookRows(rows);
-                sourceFileName = file.name;
-
-                if (!quizData.length) {
-                    throw new Error("Không có dữ liệu câu hỏi hợp lệ sau khi parse file.");
-                }
-
-                applyLoadedQuizData("Đã tải thành công " + quizData.length + " câu hỏi từ sheet: " + sheetName + " | File: " + sourceFileName);
+                await loadQuizFromArrayBuffer(data, file.name, "sheet");
             } catch (error) {
                 setStatus("error", "Lỗi đọc file: " + (error && error.message ? error.message : "Không xác định"));
                 quizContainer.innerHTML = "";
-                async function loadSharedFromGitHub() {
-                    const cfg = getSharedConfig(false);
-                    if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.path) {
-                        setStatus("warn", "Vui lòng nhập owner, repo, branch và đường dẫn JSON.");
-                        return;
-                    }
-
-                    saveSharedConfig();
-                    try {
-                        const rawUrl = "https://raw.githubusercontent.com/" + cfg.owner + "/" + cfg.repo + "/" + cfg.branch + "/" + cfg.path + "?t=" + Date.now();
-                        const response = await fetch(rawUrl);
-                        if (!response.ok) {
-                            throw new Error("Không đọc được dữ liệu chung (HTTP " + response.status + ").");
-                        }
-
-                        const payload = await response.json();
-                        const restored = hydrateQuizData(payload.quizData);
-                        if (!restored.length) {
-                            throw new Error("File JSON chung không có dữ liệu quiz hợp lệ.");
-                        }
-
-                        quizData = restored;
-                        sourceFileName = payload.sourceFileName || "shared-github";
-                        mode = payload.mode === "flashcard" ? "flashcard" : mode;
-                        modeSelect.value = mode;
-                        applyLoadedQuizData("Đã tải dữ liệu chung từ GitHub: " + cfg.owner + "/" + cfg.repo + ".");
-                    } catch (error) {
-                        setStatus("error", "Lỗi tải dữ liệu chung: " + (error && error.message ? error.message : "Không xác định"));
-                    }
-                }
-
-                async function saveSharedToGitHub() {
-                    if (!quizData.length) {
-                        setStatus("warn", "Chưa có dữ liệu quiz để lưu chung.");
-                        return;
-                    }
-
-                    const cfg = getSharedConfig(true);
-                    if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.path || !cfg.token) {
-                        setStatus("warn", "Vui lòng nhập đầy đủ owner/repo/branch/path và token để lưu chung.");
-                        return;
-                    }
-
-                    saveSharedConfig();
-
-                    const apiPath = encodePath(cfg.path);
-                    const contentUrl = "https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + apiPath + "?ref=" + encodeURIComponent(cfg.branch);
-                    const payload = {
-                        version: 1,
-                        updatedAt: new Date().toISOString(),
-                        sourceFileName,
-                        mode,
-                        quizData: toSerializableQuizData()
-                    };
-
-                    try {
-                        let sha = null;
-                        const checkResp = await fetch(contentUrl, {
-                            headers: {
-                                Authorization: "Bearer " + cfg.token,
-                                Accept: "application/vnd.github+json"
-                            }
-                        });
-
-                        if (checkResp.ok) {
-                            const existing = await checkResp.json();
-                            sha = existing.sha;
-                        } else if (checkResp.status !== 404) {
-                            const err = await checkResp.json().catch(() => ({}));
-                            throw new Error(err.message || "Không kiểm tra được file hiện có trên GitHub.");
-                        }
-
-                        const putBody = {
-                            message: "Update shared quiz data from web app",
-                            content: textToBase64(JSON.stringify(payload, null, 2)),
-                            branch: cfg.branch
-                        };
-
-                        if (sha) {
-                            putBody.sha = sha;
-                        }
-
-                        const putResp = await fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + apiPath, {
-                            method: "PUT",
-                            headers: {
-                                Authorization: "Bearer " + cfg.token,
-                                Accept: "application/vnd.github+json",
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify(putBody)
-                        });
-
-                        if (!putResp.ok) {
-                            const err = await putResp.json().catch(() => ({}));
-                            throw new Error(err.message || "Không thể lưu dữ liệu chung lên GitHub.");
-                        }
-
-                        setStatus("ok", "Đã lưu dữ liệu chung lên GitHub thành công: " + cfg.owner + "/" + cfg.repo + "/" + cfg.path);
-                    } catch (error) {
-                        setStatus("error", "Lỗi lưu dữ liệu chung: " + (error && error.message ? error.message : "Không xác định"));
-                    }
-                }
                 summaryEl.className = "summary";
                 summaryEl.innerHTML = "";
                 flashMeta.textContent = "";
@@ -1055,16 +920,77 @@
             }
         }
 
+        async function loadQuizFromArrayBuffer(data, sourceName, sourceType) {
+            const workbook = XLSX.read(data, { type: "array" });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+            quizData = parseWorkbookRows(rows);
+            sourceFileName = sourceName;
+
+            if (!quizData.length) {
+                throw new Error("Không có dữ liệu câu hỏi hợp lệ sau khi parse file.");
+            }
+
+            if (sourceType === "default") {
+                applyLoadedQuizData("Đã nạp dữ liệu gốc từ file: " + sourceFileName + " (sheet: " + sheetName + ")");
+            } else {
+                applyLoadedQuizData("Đã tải thành công " + quizData.length + " câu hỏi từ sheet: " + sheetName + " | File: " + sourceFileName);
+            }
+        }
+
+        async function loadDefaultExcelFromRepo() {
+            try {
+                const fileUrl = encodeURI(DEFAULT_EXCEL_FILE) + "?t=" + Date.now();
+                const response = await fetch(fileUrl);
+                if (!response.ok) {
+                    throw new Error("Không tìm thấy file dữ liệu gốc " + DEFAULT_EXCEL_FILE + ".");
+                }
+
+                const data = await response.arrayBuffer();
+                await loadQuizFromArrayBuffer(data, DEFAULT_EXCEL_FILE, "default");
+            } catch (error) {
+                setStatus("warn", "Chưa nạp được dữ liệu gốc tự động: " + (error && error.message ? error.message : "Không xác định"));
+            }
+        }
+
+        async function loadSharedFromGitHub() {
+            const cfg = getSharedConfig();
+            if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.path) {
+                setStatus("warn", "Vui lòng nhập owner, repo, branch và đường dẫn JSON.");
+                return;
+            }
+
+            saveSharedConfig();
+            try {
+                const rawUrl = "https://raw.githubusercontent.com/" + cfg.owner + "/" + cfg.repo + "/" + cfg.branch + "/" + cfg.path + "?t=" + Date.now();
+                const response = await fetch(rawUrl);
+                if (!response.ok) {
+                    throw new Error("Không đọc được dữ liệu chung (HTTP " + response.status + ").");
+                }
+
+                const payload = await response.json();
+                const restored = hydrateQuizData(payload.quizData);
+                if (!restored.length) {
+                    throw new Error("File JSON chung không có dữ liệu quiz hợp lệ.");
+                }
+
+                quizData = restored;
+                sourceFileName = payload.sourceFileName || "shared-github";
+                mode = payload.mode === "flashcard" ? "flashcard" : mode;
+                modeSelect.value = mode;
+                applyLoadedQuizData("Đã tải dữ liệu chung từ GitHub: " + cfg.owner + "/" + cfg.repo + ".");
+            } catch (error) {
+                setStatus("error", "Lỗi tải dữ liệu chung: " + (error && error.message ? error.message : "Không xác định"));
+            }
+        }
+
         loadBtn.addEventListener("click", loadExcelAndRender);
         loadSharedBtn.addEventListener("click", loadSharedFromGitHub);
-        saveSharedBtn.addEventListener("click", saveSharedToGitHub);
 
         [ownerInput, repoInput, branchInput, sharedPathInput].forEach((el) => {
             el.addEventListener("change", saveSharedConfig);
-        });
-
-        tokenInput.addEventListener("input", () => {
-            saveSharedBtn.disabled = !tokenInput.value.trim() || !quizData.length;
         });
 
         sectionSelect.addEventListener("change", () => {
@@ -1126,8 +1052,11 @@
             renderFlashcardMode();
         });
 
-        tryRestoreCache();
+        const restoredFromCache = tryRestoreCache();
         restoreSharedConfig();
+        if (!restoredFromCache) {
+            loadDefaultExcelFromRepo();
+        }
     </script>
 </body>
 
