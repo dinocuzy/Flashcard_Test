@@ -151,6 +151,31 @@
             color: var(--error);
         }
 
+        .shared-panel {
+            margin-top: 12px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .shared-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(120px, 1fr)) auto auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .shared-grid input {
+            width: 100%;
+            background: #fff;
+            color: #1b2c55;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            padding: 10px 12px;
+            font-weight: 600;
+        }
+
         .summary {
             margin-top: 18px;
             background: var(--card);
@@ -334,6 +359,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .shared-grid {
+                grid-template-columns: 1fr;
+            }
+
             .flash-controls {
                 grid-template-columns: 1fr;
             }
@@ -397,6 +426,19 @@
             </div>
 
             <div id="status" class="status"></div>
+            <div class="shared-panel">
+                <div class="shared-grid">
+                    <input id="ownerInput" type="text" placeholder="owner" value="dinocuzy" />
+                    <input id="repoInput" type="text" placeholder="repo" value="Flashcard_Test" />
+                    <input id="branchInput" type="text" placeholder="branch" value="main" />
+                    <input id="sharedPathInput" type="text" placeholder="duong-dan-json" value="data/quiz-bank.json" />
+                    <input id="tokenInput" type="password" placeholder="github token de luu" />
+                    <button id="loadSharedBtn" class="btn-primary">Tai chung</button>
+                    <button id="saveSharedBtn" class="btn-success" disabled>Luu chung</button>
+                </div>
+                <div class="tiny mt-10">Ai co token co quyen ghi vao repo se luu de chung. Nguoi khac bam "Tai chung" de
+                    lay bo cau hoi moi nhat.</div>
+            </div>
             <div class="tiny mt-10">
                 Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
                 Câu trả lời (Dịch)
@@ -419,6 +461,13 @@
         const loadBtn = document.getElementById("loadBtn");
         const submitBtn = document.getElementById("submitBtn");
         const toggleAnswersBtn = document.getElementById("toggleAnswersBtn");
+        const ownerInput = document.getElementById("ownerInput");
+        const repoInput = document.getElementById("repoInput");
+        const branchInput = document.getElementById("branchInput");
+        const sharedPathInput = document.getElementById("sharedPathInput");
+        const tokenInput = document.getElementById("tokenInput");
+        const loadSharedBtn = document.getElementById("loadSharedBtn");
+        const saveSharedBtn = document.getElementById("saveSharedBtn");
         const statusEl = document.getElementById("status");
         const quizContainer = document.getElementById("quizContainer");
         const summaryEl = document.getElementById("summary");
@@ -437,6 +486,7 @@
 
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v1";
+        const SHARED_CFG_KEY = "quiz-shared-github-config-v1";
 
         const HEADER_MAP = {
             originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
@@ -449,6 +499,64 @@
         function setStatus(type, text) {
             statusEl.className = "status " + type;
             statusEl.textContent = text;
+        }
+
+        function getSharedConfig(includeToken) {
+            return {
+                owner: ownerInput.value.trim(),
+                repo: repoInput.value.trim(),
+                branch: branchInput.value.trim() || "main",
+                path: sharedPathInput.value.trim() || "data/quiz-bank.json",
+                token: includeToken ? tokenInput.value.trim() : ""
+            };
+        }
+
+        function saveSharedConfig() {
+            const cfg = getSharedConfig(false);
+            localStorage.setItem(SHARED_CFG_KEY, JSON.stringify(cfg));
+        }
+
+        function restoreSharedConfig() {
+            const raw = localStorage.getItem(SHARED_CFG_KEY);
+            if (!raw) return;
+
+            try {
+                const cfg = JSON.parse(raw);
+                if (cfg.owner) ownerInput.value = cfg.owner;
+                if (cfg.repo) repoInput.value = cfg.repo;
+                if (cfg.branch) branchInput.value = cfg.branch;
+                if (cfg.path) sharedPathInput.value = cfg.path;
+            } catch (_) {
+                localStorage.removeItem(SHARED_CFG_KEY);
+            }
+        }
+
+        function encodePath(path) {
+            return path.split("/").map((part) => encodeURIComponent(part)).join("/");
+        }
+
+        function textToBase64(text) {
+            const bytes = new TextEncoder().encode(text);
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode(...chunk);
+            }
+            return btoa(binary);
+        }
+
+        function applyLoadedQuizData(message) {
+            currentSection = 0;
+            answersVisible = false;
+            flashIndex = 0;
+            flashFlipped = false;
+            toggleAnswersBtn.textContent = "Hiện đáp án";
+            populateSectionSelect();
+            renderByMode();
+            syncModeUi();
+            saveCache();
+            setStatus("ok", message);
         }
 
         function normalizeHeader(header) {
@@ -834,21 +942,112 @@
                     throw new Error("Không có dữ liệu câu hỏi hợp lệ sau khi parse file.");
                 }
 
-                currentSection = 0;
-                answersVisible = false;
-                flashIndex = 0;
-                flashFlipped = false;
-                populateSectionSelect();
-                renderByMode();
-                syncModeUi();
-                saveCache();
-
-                toggleAnswersBtn.textContent = "Hiện đáp án";
-
-                setStatus("ok", "Đã tải thành công " + quizData.length + " câu hỏi từ sheet: " + sheetName + " | File: " + sourceFileName);
+                applyLoadedQuizData("Đã tải thành công " + quizData.length + " câu hỏi từ sheet: " + sheetName + " | File: " + sourceFileName);
             } catch (error) {
                 setStatus("error", "Lỗi đọc file: " + (error && error.message ? error.message : "Không xác định"));
                 quizContainer.innerHTML = "";
+                async function loadSharedFromGitHub() {
+                    const cfg = getSharedConfig(false);
+                    if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.path) {
+                        setStatus("warn", "Vui lòng nhập owner, repo, branch và đường dẫn JSON.");
+                        return;
+                    }
+
+                    saveSharedConfig();
+                    try {
+                        const rawUrl = "https://raw.githubusercontent.com/" + cfg.owner + "/" + cfg.repo + "/" + cfg.branch + "/" + cfg.path + "?t=" + Date.now();
+                        const response = await fetch(rawUrl);
+                        if (!response.ok) {
+                            throw new Error("Không đọc được dữ liệu chung (HTTP " + response.status + ").");
+                        }
+
+                        const payload = await response.json();
+                        const restored = hydrateQuizData(payload.quizData);
+                        if (!restored.length) {
+                            throw new Error("File JSON chung không có dữ liệu quiz hợp lệ.");
+                        }
+
+                        quizData = restored;
+                        sourceFileName = payload.sourceFileName || "shared-github";
+                        mode = payload.mode === "flashcard" ? "flashcard" : mode;
+                        modeSelect.value = mode;
+                        applyLoadedQuizData("Đã tải dữ liệu chung từ GitHub: " + cfg.owner + "/" + cfg.repo + ".");
+                    } catch (error) {
+                        setStatus("error", "Lỗi tải dữ liệu chung: " + (error && error.message ? error.message : "Không xác định"));
+                    }
+                }
+
+                async function saveSharedToGitHub() {
+                    if (!quizData.length) {
+                        setStatus("warn", "Chưa có dữ liệu quiz để lưu chung.");
+                        return;
+                    }
+
+                    const cfg = getSharedConfig(true);
+                    if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.path || !cfg.token) {
+                        setStatus("warn", "Vui lòng nhập đầy đủ owner/repo/branch/path và token để lưu chung.");
+                        return;
+                    }
+
+                    saveSharedConfig();
+
+                    const apiPath = encodePath(cfg.path);
+                    const contentUrl = "https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + apiPath + "?ref=" + encodeURIComponent(cfg.branch);
+                    const payload = {
+                        version: 1,
+                        updatedAt: new Date().toISOString(),
+                        sourceFileName,
+                        mode,
+                        quizData: toSerializableQuizData()
+                    };
+
+                    try {
+                        let sha = null;
+                        const checkResp = await fetch(contentUrl, {
+                            headers: {
+                                Authorization: "Bearer " + cfg.token,
+                                Accept: "application/vnd.github+json"
+                            }
+                        });
+
+                        if (checkResp.ok) {
+                            const existing = await checkResp.json();
+                            sha = existing.sha;
+                        } else if (checkResp.status !== 404) {
+                            const err = await checkResp.json().catch(() => ({}));
+                            throw new Error(err.message || "Không kiểm tra được file hiện có trên GitHub.");
+                        }
+
+                        const putBody = {
+                            message: "Update shared quiz data from web app",
+                            content: textToBase64(JSON.stringify(payload, null, 2)),
+                            branch: cfg.branch
+                        };
+
+                        if (sha) {
+                            putBody.sha = sha;
+                        }
+
+                        const putResp = await fetch("https://api.github.com/repos/" + cfg.owner + "/" + cfg.repo + "/contents/" + apiPath, {
+                            method: "PUT",
+                            headers: {
+                                Authorization: "Bearer " + cfg.token,
+                                Accept: "application/vnd.github+json",
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(putBody)
+                        });
+
+                        if (!putResp.ok) {
+                            const err = await putResp.json().catch(() => ({}));
+                            throw new Error(err.message || "Không thể lưu dữ liệu chung lên GitHub.");
+                        }
+
+                        setStatus("ok", "Đã lưu dữ liệu chung lên GitHub thành công: " + cfg.owner + "/" + cfg.repo + "/" + cfg.path);
+                    } catch (error) {
+                        setStatus("error", "Lỗi lưu dữ liệu chung: " + (error && error.message ? error.message : "Không xác định"));
+                    }
+                }
                 summaryEl.className = "summary";
                 summaryEl.innerHTML = "";
                 flashMeta.textContent = "";
@@ -857,6 +1056,16 @@
         }
 
         loadBtn.addEventListener("click", loadExcelAndRender);
+        loadSharedBtn.addEventListener("click", loadSharedFromGitHub);
+        saveSharedBtn.addEventListener("click", saveSharedToGitHub);
+
+        [ownerInput, repoInput, branchInput, sharedPathInput].forEach((el) => {
+            el.addEventListener("change", saveSharedConfig);
+        });
+
+        tokenInput.addEventListener("input", () => {
+            saveSharedBtn.disabled = !tokenInput.value.trim() || !quizData.length;
+        });
 
         sectionSelect.addEventListener("change", () => {
             currentSection = Number(sectionSelect.value) || 0;
@@ -918,6 +1127,7 @@
         });
 
         tryRestoreCache();
+        restoreSharedConfig();
     </script>
 </body>
 
