@@ -450,6 +450,16 @@
             display: block;
         }
 
+        .goal-input {
+            width: 78px;
+            border: 1px solid var(--ring);
+            border-radius: 10px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.85);
+            color: #163a63;
+            font-weight: 700;
+        }
+
         .tiny {
             font-size: 13px;
             color: var(--muted);
@@ -1032,7 +1042,16 @@
                     <input id="practiceModeToggle" type="checkbox" />
                     Luyện tập: chấm ngay từng câu
                 </label>
+                <label class="practice-toggle" for="wrongOnlyToggle">
+                    <input id="wrongOnlyToggle" type="checkbox" />
+                    Ôn tập câu hay sai
+                </label>
+                <label class="practice-toggle" for="dailyGoalInput">
+                    Mục tiêu ngày
+                    <input id="dailyGoalInput" class="goal-input" type="number" min="5" step="5" value="20" />
+                </label>
                 <div id="learningStats" class="learning-stats">Tiến độ: 0/0 câu</div>
+                <div id="streakStats" class="learning-stats">Mục tiêu: 0/20 | Streak: 0 ngày</div>
                 <div class="tiny">Phím tắt: Ctrl+Enter nộp bài | Alt+A hiện/ẩn đáp án | Flashcard dùng mũi tên trái/phải
                 </div>
             </div>
@@ -1096,7 +1115,10 @@
         const toggleAnswersBtn = document.getElementById("toggleAnswersBtn");
         const aiSettingsBtn = document.getElementById("aiSettingsBtn");
         const practiceModeToggle = document.getElementById("practiceModeToggle");
+        const wrongOnlyToggle = document.getElementById("wrongOnlyToggle");
+        const dailyGoalInput = document.getElementById("dailyGoalInput");
         const learningStats = document.getElementById("learningStats");
+        const streakStats = document.getElementById("streakStats");
         const aiModal = document.getElementById("aiModal");
         const aiApiKeyInput = document.getElementById("aiApiKey");
         const saveAiKeyBtn = document.getElementById("saveAiKey");
@@ -1138,9 +1160,13 @@
         const STORAGE_KEY = "quiz-from-excel-cache-v2";
         const TEST_PROGRESS_PREFIX = "quiz-from-excel-progress-v1";
         const PRACTICE_MODE_KEY = "quiz-from-excel-practice-mode";
+        const WRONG_ONLY_KEY = "quiz-from-excel-wrong-only";
+        const WRONG_BOOK_PREFIX = "quiz-from-excel-wrong-book-v1";
+        const DAILY_LEARNING_KEY = "quiz-from-excel-daily-v1";
         const DEFAULT_EXCEL_FILE = "FE_SWR.xlsx";
 
         let practiceMode = localStorage.getItem(PRACTICE_MODE_KEY) === "1";
+        let wrongOnlyMode = localStorage.getItem(WRONG_ONLY_KEY) === "1";
 
         const HEADER_MAP = {
             originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
@@ -1359,6 +1385,7 @@
                 currentSection,
                 mode,
                 practiceMode,
+                wrongOnlyMode,
                 quizData: toSerializableQuizData()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -1381,8 +1408,13 @@
                 if (typeof parsed.practiceMode === "boolean") {
                     practiceMode = parsed.practiceMode;
                 }
+                if (typeof parsed.wrongOnlyMode === "boolean") {
+                    wrongOnlyMode = parsed.wrongOnlyMode;
+                }
                 practiceModeToggle.checked = practiceMode;
+                wrongOnlyToggle.checked = wrongOnlyMode;
                 localStorage.setItem(PRACTICE_MODE_KEY, practiceMode ? "1" : "0");
+                localStorage.setItem(WRONG_ONLY_KEY, wrongOnlyMode ? "1" : "0");
 
                 answersVisible = false;
                 flashIndex = 0;
@@ -1398,6 +1430,134 @@
                 localStorage.removeItem(STORAGE_KEY);
                 return false;
             }
+        }
+
+        function getWrongBookKey() {
+            const source = sourceFileName || "unknown";
+            return WRONG_BOOK_PREFIX + "::" + source + "::section-" + currentSection;
+        }
+
+        function loadWrongBook() {
+            try {
+                const raw = localStorage.getItem(getWrongBookKey());
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (_) {
+                return {};
+            }
+        }
+
+        function saveWrongBook(book) {
+            localStorage.setItem(getWrongBookKey(), JSON.stringify(book || {}));
+        }
+
+        function updateWrongBookByResult(q, selected) {
+            if (!q) return;
+            const isMulti = q.answerLabels.size > 1;
+            if (!selected || !selected.size) return;
+            if (isMulti && selected.size < q.answerLabels.size) return;
+
+            const wrongBook = loadWrongBook();
+            const key = String(q.id);
+            const cur = Number(wrongBook[key] || 0);
+            const isCorrect = setsAreEqual(selected, q.answerLabels);
+            wrongBook[key] = isCorrect ? Math.max(0, cur - 1) : Math.min(20, cur + 2);
+            saveWrongBook(wrongBook);
+        }
+
+        function getTodayKey() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const d = String(now.getDate()).padStart(2, "0");
+            return `${y}-${m}-${d}`;
+        }
+
+        function getYesterdayKey() {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        }
+
+        function ensureDailyLearningState() {
+            let data;
+            try {
+                data = JSON.parse(localStorage.getItem(DAILY_LEARNING_KEY) || "{}");
+            } catch (_) {
+                data = {};
+            }
+
+            const today = getTodayKey();
+            const yesterday = getYesterdayKey();
+
+            if (!data || typeof data !== "object") {
+                data = {};
+            }
+
+            const goal = Number(data.goal) > 0 ? Number(data.goal) : 20;
+            const streak = Number(data.streak) > 0 ? Number(data.streak) : 0;
+            const answered = Number(data.answered) > 0 ? Number(data.answered) : 0;
+            const completed = Boolean(data.completed);
+
+            if (data.date !== today) {
+                const carryStreak = data.date === yesterday && completed ? streak : 0;
+                data = {
+                    date: today,
+                    goal,
+                    answered: 0,
+                    streak: carryStreak,
+                    completed: false
+                };
+                localStorage.setItem(DAILY_LEARNING_KEY, JSON.stringify(data));
+            } else {
+                data = { date: today, goal, answered, streak, completed };
+                localStorage.setItem(DAILY_LEARNING_KEY, JSON.stringify(data));
+            }
+
+            return data;
+        }
+
+        function updateDailyStatsUi() {
+            const data = ensureDailyLearningState();
+            dailyGoalInput.value = String(data.goal);
+            streakStats.textContent = `Mục tiêu: ${data.answered}/${data.goal} | Streak: ${data.streak} ngày`;
+        }
+
+        function increaseDailyAnswered(by = 1) {
+            const data = ensureDailyLearningState();
+            const delta = Number(by) > 0 ? Number(by) : 0;
+            if (!delta) return;
+
+            data.answered = Math.max(0, Number(data.answered || 0) + delta);
+            if (!data.completed && data.answered >= data.goal) {
+                data.completed = true;
+                data.streak = Number(data.streak || 0) + 1;
+                setStatus("ok", `Đạt mục tiêu hôm nay! Streak hiện tại: ${data.streak} ngày.`);
+            }
+            localStorage.setItem(DAILY_LEARNING_KEY, JSON.stringify(data));
+            updateDailyStatsUi();
+        }
+
+        function getTestSectionData() {
+            const base = getSectionData();
+            const wrongBook = loadWrongBook();
+            let list = base.slice();
+
+            if (wrongOnlyMode) {
+                list = list.filter((q) => Number(wrongBook[String(q.id)] || 0) > 0);
+            }
+
+            list.sort((a, b) => {
+                const wb = Number(wrongBook[String(b.id)] || 0);
+                const wa = Number(wrongBook[String(a.id)] || 0);
+                if (wb !== wa) return wb - wa;
+                return a.id - b.id;
+            });
+
+            return list;
         }
 
         function getProgressStorageKey() {
@@ -1419,9 +1579,10 @@
             if (mode !== "test" || !quizData.length) return;
             const payload = {};
             const cards = quizContainer.querySelectorAll(".question-card");
+            const sectionData = getTestSectionData();
 
             cards.forEach((card, index) => {
-                const q = getSectionData()[index];
+                const q = sectionData[index];
                 if (!q) return;
 
                 const selected = [];
@@ -1440,7 +1601,7 @@
             if (mode !== "test") return;
             const saved = loadTestProgressForSection();
             const cards = quizContainer.querySelectorAll(".question-card");
-            const sectionData = getSectionData();
+            const sectionData = getTestSectionData();
 
             cards.forEach((card, index) => {
                 const q = sectionData[index];
@@ -1461,10 +1622,10 @@
 
         function updateLearningStats() {
             if (!learningStats) return;
-            const sectionData = getSectionData();
+            const sectionData = getTestSectionData();
             const total = sectionData.length;
             if (!total) {
-                learningStats.textContent = "Tiến độ: 0/0 câu";
+                learningStats.textContent = wrongOnlyMode ? "Tiến độ: 0/0 câu | Không có câu sai để ôn" : "Tiến độ: 0/0 câu";
                 return;
             }
 
@@ -1530,7 +1691,13 @@
             summaryEl.className = "summary";
             summaryEl.innerHTML = "";
 
-            const sectionData = getSectionData();
+            const sectionData = getTestSectionData();
+
+            if (!sectionData.length && wrongOnlyMode) {
+                quizContainer.innerHTML = `<article class="question-card"><h3 style="margin-top:0">Bạn chưa có câu sai trong học phần này</h3><p class="tiny">Hãy tắt chế độ "Ôn tập câu hay sai" hoặc làm thêm câu mới để hệ thống ghi nhận.</p></article>`;
+                updateLearningStats();
+                return;
+            }
 
             sectionData.forEach((q, idx) => {
                 const card = document.createElement("article");
@@ -1792,6 +1959,7 @@
             // Section select
             sectionSelect.disabled = !hasData;
             practiceModeToggle.disabled = !hasData || isFlash || isGame;
+            wrongOnlyToggle.disabled = !hasData || isFlash || isGame;
 
             // Update status based on mode
             if (hasData) {
@@ -1804,6 +1972,8 @@
             } else {
                 updateLearningStats();
             }
+
+            updateDailyStatsUi();
         }
 
         function resetCurrentTest() {
@@ -1829,7 +1999,7 @@
         function evaluateQuiz() {
             let score = 0;
 
-            const sectionData = getSectionData();
+            const sectionData = getTestSectionData();
 
             sectionData.forEach((q, index) => {
                 const card = quizContainer.children[index];
@@ -1847,6 +2017,7 @@
 
                 const correct = q.answerLabels;
                 const isCorrect = setsAreEqual(selected, correct);
+                updateWrongBookByResult(q, selected);
 
                 if (isCorrect) score += 1;
 
@@ -1952,6 +2123,7 @@
         });
 
         practiceModeToggle.checked = practiceMode;
+        wrongOnlyToggle.checked = wrongOnlyMode;
         practiceModeToggle.addEventListener("change", () => {
             practiceMode = practiceModeToggle.checked;
             localStorage.setItem(PRACTICE_MODE_KEY, practiceMode ? "1" : "0");
@@ -1960,6 +2132,26 @@
                 renderTestMode();
             }
             setStatus("ok", practiceMode ? "Đã bật chế độ luyện tập chấm ngay." : "Đã tắt chế độ luyện tập chấm ngay.");
+        });
+
+        wrongOnlyToggle.addEventListener("change", () => {
+            wrongOnlyMode = wrongOnlyToggle.checked;
+            localStorage.setItem(WRONG_ONLY_KEY, wrongOnlyMode ? "1" : "0");
+            saveCache();
+            if (mode === "test") {
+                renderTestMode();
+            }
+            setStatus("ok", wrongOnlyMode ? "Đang lọc câu hay sai để ôn tập." : "Đã hiển thị toàn bộ câu hỏi của học phần.");
+        });
+
+        dailyGoalInput.addEventListener("change", () => {
+            const value = Math.max(5, Number(dailyGoalInput.value) || 20);
+            const normalized = Math.round(value / 5) * 5;
+            const data = ensureDailyLearningState();
+            data.goal = normalized;
+            localStorage.setItem(DAILY_LEARNING_KEY, JSON.stringify(data));
+            updateDailyStatsUi();
+            setStatus("ok", `Đã cập nhật mục tiêu học hôm nay: ${normalized} câu.`);
         });
 
         modeSelect.addEventListener("change", () => {
@@ -2107,17 +2299,36 @@
             const input = e.target.closest(".option input");
             if (!input) return;
 
+            const progressBefore = loadTestProgressForSection();
             const card = input.closest(".question-card");
             if (!card) return;
             const cardIndex = Array.from(quizContainer.children).indexOf(card);
-            const q = getSectionData()[cardIndex];
+            const q = getTestSectionData()[cardIndex];
             if (!q) return;
+
+            const previousSelected = progressBefore[String(q.id)] || [];
+            const wasAnswered = previousSelected.length > 0;
+
+            const selectedNow = new Set();
+            card.querySelectorAll(".option input:checked").forEach((item) => {
+                const opt = item.closest(".option");
+                const key = opt ? (opt.getAttribute("data-key") || item.value) : item.value;
+                selectedNow.add(key);
+            });
+            const isAnsweredNow = selectedNow.size > 0;
 
             if (practiceMode) {
                 gradeSingleTestCard(card, q);
+                updateWrongBookByResult(q, selectedNow);
             }
             saveTestProgressFromDom();
             updateLearningStats();
+
+            if (!wasAnswered && isAnsweredNow) {
+                increaseDailyAnswered(1);
+            } else {
+                updateDailyStatsUi();
+            }
         });
 
         document.addEventListener("keydown", (e) => {
@@ -2151,6 +2362,7 @@
 
         initStageReveal();
         initParallax();
+        updateDailyStatsUi();
 
         const restoredFromCache = tryRestoreCache();
         if (!restoredFromCache) {
