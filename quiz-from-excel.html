@@ -274,20 +274,27 @@
         }
 
         .grid {
-            margin-top: 18px;
+            margin-top: 24px;
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 14px;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr));
+            gap: 20px;
+            justify-content: center;
         }
 
         .question-card {
             background: linear-gradient(168deg, var(--card-strong), var(--card));
             border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 16px;
+            border-radius: 20px;
+            padding: 22px;
             box-shadow: var(--shadow);
             -webkit-backdrop-filter: blur(16px) saturate(160%);
             backdrop-filter: blur(16px) saturate(160%);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .question-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 25px 60px rgba(31, 66, 145, 0.18);
         }
 
         .stagger-card {
