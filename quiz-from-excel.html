@@ -401,6 +401,49 @@
             box-shadow: 0 25px 60px rgba(31, 66, 145, 0.18);
         }
 
+        .test-render-progress {
+            display: grid;
+            gap: 10px;
+        }
+
+        .render-progress-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .render-progress-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(212, 225, 255, 0.9);
+            overflow: hidden;
+        }
+
+        .render-progress-bar>div {
+            height: 100%;
+            width: var(--progress, 0%);
+            background: linear-gradient(90deg, #1e6fff, #59a5ff);
+            transition: width 120ms linear;
+        }
+
+        .skeleton-lines {
+            display: grid;
+            gap: 8px;
+        }
+
+        .skeleton-line {
+            height: 12px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, rgba(220, 232, 255, 0.85), rgba(244, 248, 255, 0.96), rgba(220, 232, 255, 0.85));
+            background-size: 220% 100%;
+            animation: shimmer 1.2s linear infinite;
+        }
+
+        .skeleton-line.short {
+            width: 70%;
+        }
+
         .stagger-card {
             opacity: 0;
             transform: translateY(14px) scale(0.99);
@@ -804,6 +847,16 @@
             to {
                 opacity: 1;
                 transform: translateY(0);
+            }
+        }
+
+        @keyframes shimmer {
+            from {
+                background-position: 200% 0;
+            }
+
+            to {
+                background-position: -20% 0;
             }
         }
 
@@ -1258,6 +1311,40 @@
             padding: 0 16px;
             cursor: pointer;
         }
+
+        .subtle-note {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .m0 {
+            margin-top: 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn-muted {
+            color: #666;
+            border-color: #ccc;
+        }
+
+        .modal-warning {
+            margin-top: 15px;
+            color: #e74c3c;
+        }
+
+        .chat-close-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -1266,7 +1353,7 @@
         <section class="hero stage-reveal" data-parallax="9">
             <div id="aiStatusBadge" class="ai-status-badge">
                 <span>✨ AI Tutor (SWR301 FPT) is Ready!</span>
-                <span style="font-size: 0.8rem; opacity: 0.8;">(Click to set Key)</span>
+                <span class="subtle-note">(Click to set Key)</span>
             </div>
             <h1>Quiz động từ Excel</h1>
             <p>Upload file .xlsx/.xls theo cấu trúc cột trong ảnh để tự động hiển thị câu hỏi, chọn đáp án và chấm điểm.
@@ -1334,14 +1421,14 @@
     <!-- AI Settings Modal -->
     <div id="aiModal">
         <div class="ai-modal-content">
-            <h3 style="margin-top:0">Cài đặt Gemini AI ✨</h3>
+            <h3 class="m0">Cài đặt Gemini AI ✨</h3>
             <p class="tiny">Nhập Google Gemini API Key để nhận giải thích tự động cho môn SWR301 (FPT).</p>
             <input type="password" id="aiApiKey" class="ai-key-input" placeholder="Nhập API Key tại đây..." />
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
-                <button id="closeAiModal" class="btn-outline" style="color:#666; border-color:#ccc">Hủy</button>
+            <div class="modal-actions">
+                <button id="closeAiModal" class="btn-outline btn-muted">Hủy</button>
                 <button id="saveAiKey" class="btn-primary">Lưu Key</button>
             </div>
-            <p class="tiny" style="margin-top:15px; color:#e74c3c">⚠️ Lưu ý: Key được lưu trong trình duyệt của bạn
+            <p class="tiny modal-warning">⚠️ Lưu ý: Key được lưu trong trình duyệt của bạn
                 (localStorage), không lưu vào file.</p>
         </div>
     </div>
@@ -1351,8 +1438,7 @@
     <div id="aiChatWindow">
         <div class="chat-header">
             <span>✨ AI Tutor - SWR301 FPT</span>
-            <button id="closeChatBtn"
-                style="background:transparent; border:none; color:white; font-size:20px; cursor:pointer;">×</button>
+            <button id="closeChatBtn" class="chat-close-btn">×</button>
         </div>
         <div id="chatMessages" class="chat-messages">
             <div class="chat-msg msg-ai">Chào bạn! Mình là AI Tutor môn SWR301. Bạn có thắc mắc gì về bài học hay câu
@@ -1422,6 +1508,11 @@
         let testSequenceCache = { key: "", ids: [] };
         let flashSequenceCache = { key: "", ids: [] };
         let gameSequenceCache = { key: "", ids: [] };
+        let saveCacheTimer = null;
+        let saveProgressTimer = null;
+        let wrongBookCache = { key: "", data: null };
+        let learningStatsCache = { key: "", total: 0, answered: 0, correct: 0, byQuestion: {} };
+        let testRenderToken = 0;
 
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v2";
@@ -1431,6 +1522,7 @@
         const WRONG_BOOK_PREFIX = "quiz-from-excel-wrong-book-v1";
         const DAILY_LEARNING_KEY = "quiz-from-excel-daily-v1";
         const DEFAULT_EXCEL_FILE = "FE_SWR.xlsx";
+        const TEST_RENDER_BATCH = 10;
 
         let practiceMode = localStorage.getItem(PRACTICE_MODE_KEY) === "1";
         let wrongOnlyMode = localStorage.getItem(WRONG_ONLY_KEY) === "1";
@@ -1565,6 +1657,18 @@
             return labels;
         }
 
+        function inferQuestionTypeFromData(options, answerLabels) {
+            if ((answerLabels && answerLabels.size > 1)) return "multi";
+            const opts = options || [];
+            if (opts.length === 2) {
+                const normalized = opts.map((opt) => normalizeChoiceText(stripOptionPrefix(opt)));
+                const tfTokens = ["true", "false", "đúng", "sai", "yes", "no"];
+                const tfCount = normalized.filter((opt) => tfTokens.includes(opt)).length;
+                if (tfCount >= 1) return "tf";
+            }
+            return "single";
+        }
+
         function parseWorkbookRows(rows) {
             if (!rows.length) return [];
             const headers = Object.keys(rows[0]);
@@ -1595,7 +1699,8 @@
                         options,
                         originalAnswer: String(answerRaw || "").trim(),
                         vietnameseAnswer: String(answerViRaw || "").trim(),
-                        answerLabels
+                        answerLabels,
+                        questionType: inferQuestionTypeFromData(options, answerLabels)
                     };
                 })
                 .filter((item) => item.originalQuestion && item.options.length);
@@ -1614,20 +1719,13 @@
             testSequenceCache = { key: "", ids: [] };
             flashSequenceCache = { key: "", ids: [] };
             gameSequenceCache = { key: "", ids: [] };
+            wrongBookCache = { key: "", data: null };
+            learningStatsCache = { key: "", total: 0, answered: 0, correct: 0, byQuestion: {} };
         }
 
         function getQuestionType(q) {
-            const isMulti = q.answerLabels.size > 1;
-            if (isMulti) return "multi";
-
-            if ((q.options || []).length === 2) {
-                const normalized = q.options.map((opt) => normalizeChoiceText(stripOptionPrefix(opt)));
-                const tfTokens = ["true", "false", "đúng", "sai", "yes", "no"];
-                const tfCount = normalized.filter((opt) => tfTokens.includes(opt)).length;
-                if (tfCount >= 1) return "tf";
-            }
-
-            return "single";
+            if (q && q.questionType) return q.questionType;
+            return inferQuestionTypeFromData(q?.options || [], q?.answerLabels || new Set());
         }
 
         function getQuestionByIds(base, ids) {
@@ -1722,7 +1820,8 @@
                 options: q.options,
                 originalAnswer: q.originalAnswer,
                 vietnameseAnswer: q.vietnameseAnswer,
-                answerLabels: Array.from(q.answerLabels)
+                answerLabels: Array.from(q.answerLabels),
+                questionType: q.questionType || getQuestionType(q)
             }));
         }
 
@@ -1734,7 +1833,8 @@
                 options: q.options || [],
                 originalAnswer: q.originalAnswer,
                 vietnameseAnswer: q.vietnameseAnswer,
-                answerLabels: new Set(q.answerLabels || [])
+                answerLabels: new Set(q.answerLabels || []),
+                questionType: q.questionType || inferQuestionTypeFromData(q.options || [], new Set(q.answerLabels || []))
             }));
         }
 
@@ -1749,6 +1849,14 @@
                 quizData: toSerializableQuizData()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        }
+
+        function scheduleSaveCache(delay = 140) {
+            if (saveCacheTimer) clearTimeout(saveCacheTimer);
+            saveCacheTimer = setTimeout(() => {
+                saveCache();
+                saveCacheTimer = null;
+            }, delay);
         }
 
         function tryRestoreCache() {
@@ -1798,17 +1906,28 @@
         }
 
         function loadWrongBook() {
+            const key = getWrongBookKey();
+            if (wrongBookCache.key === key && wrongBookCache.data) {
+                return wrongBookCache.data;
+            }
+
             try {
-                const raw = localStorage.getItem(getWrongBookKey());
+                const raw = localStorage.getItem(key);
                 const parsed = raw ? JSON.parse(raw) : {};
-                return parsed && typeof parsed === "object" ? parsed : {};
+                const data = parsed && typeof parsed === "object" ? parsed : {};
+                wrongBookCache = { key, data };
+                return data;
             } catch (_) {
+                wrongBookCache = { key, data: {} };
                 return {};
             }
         }
 
         function saveWrongBook(book) {
-            localStorage.setItem(getWrongBookKey(), JSON.stringify(book || {}));
+            const key = getWrongBookKey();
+            const data = book || {};
+            wrongBookCache = { key, data };
+            localStorage.setItem(key, JSON.stringify(data));
         }
 
         function updateWrongBookByResult(q, selected) {
@@ -2038,6 +2157,14 @@
             localStorage.setItem(getProgressStorageKey(), JSON.stringify(payload));
         }
 
+        function scheduleSaveTestProgress(delay = 120) {
+            if (saveProgressTimer) clearTimeout(saveProgressTimer);
+            saveProgressTimer = setTimeout(() => {
+                saveTestProgressFromDom();
+                saveProgressTimer = null;
+            }, delay);
+        }
+
         function applyProgressToDom() {
             if (mode !== "test") return;
             const saved = loadTestProgressForSection();
@@ -2070,30 +2197,57 @@
                 return;
             }
 
+            const key = `${sourceFileName}|${currentSection}|${wrongOnlyMode}|${total}`;
+            if (learningStatsCache.key !== key) {
+                initLearningStatsCache(sectionData);
+            }
+
+            learningStats.textContent = `Tiến độ: ${learningStatsCache.answered}/${total} câu | Đúng tạm thời: ${learningStatsCache.correct}`;
+        }
+
+        function getQuestionStatus(q, selectedSet) {
+            const answered = selectedSet.size > 0;
+            const correct = answered && setsAreEqual(selectedSet, q.answerLabels);
+            return { answered, correct };
+        }
+
+        function initLearningStatsCache(sectionData) {
+            const total = sectionData.length;
+            const key = `${sourceFileName}|${currentSection}|${wrongOnlyMode}|${total}`;
+            const progress = loadTestProgressForSection();
+            const byQuestion = {};
             let answered = 0;
             let correct = 0;
-            const cards = quizContainer.querySelectorAll(".question-card");
 
-            cards.forEach((card, index) => {
-                const q = sectionData[index];
-                if (!q) return;
-
-                const selected = new Set();
-                card.querySelectorAll(".option input:checked").forEach((input) => {
-                    const opt = input.closest(".option");
-                    const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
-                    selected.add(key);
-                });
-
-                if (selected.size > 0) {
-                    answered += 1;
-                }
-                if (selected.size > 0 && setsAreEqual(selected, q.answerLabels)) {
-                    correct += 1;
-                }
+            sectionData.forEach((q) => {
+                const selected = new Set(progress[String(q.id)] || []);
+                const status = getQuestionStatus(q, selected);
+                byQuestion[String(q.id)] = status;
+                if (status.answered) answered += 1;
+                if (status.correct) correct += 1;
             });
 
-            learningStats.textContent = `Tiến độ: ${answered}/${total} câu | Đúng tạm thời: ${correct}`;
+            learningStatsCache = { key, total, answered, correct, byQuestion };
+        }
+
+        function updateLearningStatsForQuestion(q, selectedSet, total) {
+            if (!q || !learningStats) return;
+            const key = `${sourceFileName}|${currentSection}|${wrongOnlyMode}|${total}`;
+            if (learningStatsCache.key !== key) {
+                initLearningStatsCache(getTestSectionData());
+            }
+
+            const qid = String(q.id);
+            const prev = learningStatsCache.byQuestion[qid] || { answered: false, correct: false };
+            const next = getQuestionStatus(q, selectedSet);
+
+            if (prev.answered && !next.answered) learningStatsCache.answered -= 1;
+            if (!prev.answered && next.answered) learningStatsCache.answered += 1;
+            if (prev.correct && !next.correct) learningStatsCache.correct -= 1;
+            if (!prev.correct && next.correct) learningStatsCache.correct += 1;
+
+            learningStatsCache.byQuestion[qid] = next;
+            learningStats.textContent = `Tiến độ: ${learningStatsCache.answered}/${total} câu | Đúng tạm thời: ${learningStatsCache.correct}`;
         }
 
         function gradeSingleTestCard(card, q) {
@@ -2195,6 +2349,8 @@
         }
 
         function renderTestMode() {
+            testRenderToken += 1;
+            const renderToken = testRenderToken;
             quizContainer.innerHTML = "";
             summaryEl.className = "summary";
             summaryEl.innerHTML = "";
@@ -2207,7 +2363,21 @@
                 return;
             }
 
-            sectionData.forEach((q, idx) => {
+            const progressCard = document.createElement("article");
+            progressCard.className = "question-card test-render-progress";
+            progressCard.innerHTML = `
+                <div class="render-progress-title">Đang tải câu hỏi...</div>
+                <div class="render-progress-bar"><div></div></div>
+                <div class="tiny" data-role="render-progress-text">0/${sectionData.length}</div>
+                <div class="skeleton-lines">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line short"></div>
+                </div>
+            `;
+            quizContainer.appendChild(progressCard);
+
+            const buildCard = (q, idx) => {
                 const card = document.createElement("article");
                 card.className = "question-card stagger-card";
                 card.style.setProperty("--card-index", String(idx));
@@ -2227,11 +2397,11 @@
                     : "";
 
                 const optionsHtml = q.options
-                    .map((opt, idx) => {
+                    .map((opt, optionIdx) => {
                         const key = getOptionKey(opt);
                         const inputName = "q-" + q.id;
-                        const inputId = inputName + "-" + idx;
-                        const label = extractLabel(opt) || String(idx + 1);
+                        const inputId = inputName + "-" + optionIdx;
+                        const label = extractLabel(opt) || String(optionIdx + 1);
                         return `
                             <label class="option" data-key="${escapeHtml(key)}">
                                 <input id="${inputId}" name="${inputName}" type="${inputType}" value="${escapeHtml(key)}" />
@@ -2259,12 +2429,49 @@
           </div>
         `;
 
-                quizContainer.appendChild(card);
-            });
+                return card;
+            };
 
-            applyProgressToDom();
-            quizContainer.querySelectorAll(".question-card").forEach((card) => refreshOptionState(card));
-            updateLearningStats();
+            let cursor = 0;
+            const renderChunk = () => {
+                if (renderToken !== testRenderToken || mode !== "test") return;
+
+                const fragment = document.createDocumentFragment();
+                const end = Math.min(cursor + TEST_RENDER_BATCH, sectionData.length);
+
+                for (let i = cursor; i < end; i += 1) {
+                    fragment.appendChild(buildCard(sectionData[i], i));
+                }
+
+                quizContainer.appendChild(fragment);
+                cursor = end;
+
+                const progressValue = Math.round((cursor / sectionData.length) * 100);
+                const barEl = progressCard.querySelector(".render-progress-bar > div");
+                const textEl = progressCard.querySelector("[data-role='render-progress-text']");
+                if (barEl) {
+                    barEl.style.setProperty("--progress", `${progressValue}%`);
+                }
+                if (textEl) {
+                    textEl.textContent = `${cursor}/${sectionData.length}`;
+                }
+
+                if (cursor < sectionData.length) {
+                    requestAnimationFrame(renderChunk);
+                    return;
+                }
+
+                if (progressCard.parentNode === quizContainer) {
+                    quizContainer.removeChild(progressCard);
+                }
+
+                applyProgressToDom();
+                quizContainer.querySelectorAll(".question-card").forEach((card) => refreshOptionState(card));
+                initLearningStatsCache(sectionData);
+                updateLearningStats();
+            };
+
+            requestAnimationFrame(renderChunk);
         }
 
         function renderFlashcardMode() {
@@ -2714,7 +2921,7 @@
         practiceModeToggle.addEventListener("change", () => {
             practiceMode = practiceModeToggle.checked;
             localStorage.setItem(PRACTICE_MODE_KEY, practiceMode ? "1" : "0");
-            saveCache();
+            scheduleSaveCache();
             if (mode === "test") {
                 renderTestMode();
             }
@@ -2725,7 +2932,7 @@
             wrongOnlyMode = wrongOnlyToggle.checked;
             localStorage.setItem(WRONG_ONLY_KEY, wrongOnlyMode ? "1" : "0");
             resetModeSequenceCaches();
-            saveCache();
+            scheduleSaveCache();
             if (mode === "test") {
                 renderTestMode();
             }
@@ -2754,7 +2961,7 @@
 
             renderByMode();
             syncModeUi();
-            saveCache();
+            scheduleSaveCache();
         });
 
         submitBtn.addEventListener("click", () => {
@@ -2812,8 +3019,8 @@
                         selectedNow.add(key);
                     });
                     updateMultiSelectionUi(card, q, selectedNow);
-                    saveTestProgressFromDom();
-                    updateLearningStats();
+                    scheduleSaveTestProgress();
+                    updateLearningStatsForQuestion(q, selectedNow, getTestSectionData().length);
                     return;
                 }
             }
@@ -2850,12 +3057,6 @@
                     } else {
                         option.classList.add("wrong");
                         gameStreak = 0;
-                        // Show the correct answer
-                        document.querySelectorAll(".game-option").forEach(el => {
-                            if (q.answerLabels.has(el.getAttribute("data-key"))) {
-                                el.classList.add("correct");
-                            }
-                        });
                     }
 
                     // Show AI button after answer
@@ -2882,7 +3083,7 @@
 
                     document.querySelectorAll(".game-option").forEach(el => {
                         const key = el.getAttribute("data-key");
-                        if (q.answerLabels.has(key)) {
+                        if (selectedSet.has(key) && q.answerLabels.has(key)) {
                             el.classList.add("correct");
                         }
                         if (selectedSet.has(key) && !q.answerLabels.has(key)) {
@@ -2938,8 +3139,8 @@
                 gradeSingleTestCard(card, q);
                 updateWrongBookByResult(q, selectedNow);
             }
-            saveTestProgressFromDom();
-            updateLearningStats();
+            scheduleSaveTestProgress();
+            updateLearningStatsForQuestion(q, selectedNow, getTestSectionData().length);
 
             if (!wasAnswered && isAnsweredNow) {
                 increaseDailyAnswered(1);
