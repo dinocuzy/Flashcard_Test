@@ -1904,14 +1904,111 @@
             return aiApiKey || localStorage.getItem("gemini_api_key") || "";
         }
 
-        async function fetchAIExplanation(q, userChoice = "") {
+        let aiRetryAt = 0;
+
+        function extractRetrySeconds(errorText) {
+            const text = String(errorText || "");
+            const retryMatch = text.match(/retry in\s+([0-9]+(?:\.[0-9]+)?)s/i);
+            if (retryMatch) {
+                return Math.ceil(Number(retryMatch[1]));
+            }
+            const waitMatch = text.match(/([0-9]+(?:\.[0-9]+)?)\s*s(?:ec(?:ond)?s?)?/i);
+            if (waitMatch) {
+                return Math.ceil(Number(waitMatch[1]));
+            }
+            return 0;
+        }
+
+        function parseGeminiErrorMessage(errorText) {
+            const text = String(errorText || "");
+            const lower = text.toLowerCase();
+            const retrySeconds = extractRetrySeconds(text);
+
+            if (lower.includes("quota") || lower.includes("billing") || lower.includes("free_tier") || lower.includes("resource_exhausted")) {
+                if (retrySeconds > 0) {
+                    aiRetryAt = Date.now() + retrySeconds * 1000;
+                }
+                return "❌ Bạn đã vượt quota Gemini API. Vui lòng kiểm tra Billing/Plan trong Google AI Studio" +
+                    (retrySeconds > 0 ? ` và thử lại sau khoảng ${retrySeconds}s.` : ".");
+            }
+
+            if (lower.includes("rate") || lower.includes("too many requests") || lower.includes("429")) {
+                if (retrySeconds > 0) {
+                    aiRetryAt = Date.now() + retrySeconds * 1000;
+                }
+                return "⚠️ Gemini đang giới hạn tần suất gọi API" +
+                    (retrySeconds > 0 ? `. Vui lòng thử lại sau ${retrySeconds}s.` : ". Vui lòng đợi rồi thử lại.");
+            }
+
+            if (text.trim()) {
+                return "❌ Lỗi AI: " + text;
+            }
+
+            return "❌ Không nhận được phản hồi hợp lệ từ AI.";
+        }
+
+        async function callGemini(prompt, modelCandidates) {
             const apiKey = getApiKey();
             if (!apiKey) {
                 alert("Vui lòng cài đặt Gemini API Key trong phần ✨ AI.");
                 aiModal.classList.add("show");
-                return null;
+                return { ok: false, message: "❌ Chưa cấu hình Gemini API Key." };
             }
 
+            const remainMs = aiRetryAt - Date.now();
+            if (remainMs > 0) {
+                const waitSec = Math.ceil(remainMs / 1000);
+                return { ok: false, message: `⏳ Đang tạm khóa gọi AI do quota/rate limit. Vui lòng thử lại sau ${waitSec}s.` };
+            }
+
+            let lastError = "";
+
+            for (const model of modelCandidates) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }]
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        const errText = data?.error?.message || `HTTP ${response.status}`;
+                        lastError = errText;
+                        const lower = errText.toLowerCase();
+
+                        const shouldTryNextModel =
+                            lower.includes("not found") ||
+                            lower.includes("does not exist") ||
+                            lower.includes("unsupported") ||
+                            lower.includes("permission");
+
+                        if (shouldTryNextModel) {
+                            continue;
+                        }
+
+                        return { ok: false, message: parseGeminiErrorMessage(errText) };
+                    }
+
+                    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (aiText) {
+                        return { ok: true, text: aiText };
+                    }
+
+                    lastError = "Phản hồi AI rỗng hoặc sai định dạng.";
+                } catch (error) {
+                    lastError = error?.message || String(error);
+                }
+            }
+
+            return { ok: false, message: parseGeminiErrorMessage(lastError) };
+        }
+
+        async function fetchAIExplanation(q, userChoice = "") {
             const prompt = `
 Bạn là một trợ giảng môn SWR301 (Software Requirements) của Đại học FPT.
 Hãy giải thích câu hỏi trắc nghiệm dưới đây theo đúng ngữ cảnh môn SWR301 tại FPT.
@@ -1932,26 +2029,9 @@ Hãy giải thích:
 Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdown, ngắn gọn, chuyên nghiệp và đúng trọng tâm môn SWR301 của FPT.
             `.trim();
 
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
-                    })
-                });
-
-                const data = await response.json();
-                if (data.candidates && data.candidates[0].content.parts[0].text) {
-                    return data.candidates[0].content.parts[0].text;
-                } else {
-                    throw new Error(data.error?.message || "Không có phản hồi từ AI.");
-                }
-            } catch (error) {
-                console.error("AI Error:", error);
-                return "❌ Lỗi: " + error.message;
-            }
+            const result = await callGemini(prompt, ["gemini-2.0-flash", "gemini-2.5-flash"]);
+            if (!result.ok) return result.message;
+            return result.text;
         }
 
         async function handleShowAI(qId, userChoice = "") {
@@ -2040,13 +2120,6 @@ Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdow
         }
 
         async function sendChatToGemini(userText) {
-            const apiKey = getApiKey();
-            if (!apiKey) {
-                alert("Vui lòng cài đặt Gemini API Key trong phần ✨ AI.");
-                aiModal.classList.add("show");
-                return null;
-            }
-
             const prompt = `
 Bạn là một chuyên gia/giảng viên hướng dẫn môn SWR301 (Software Requirements) tại Đại học FPT.
 Sinh viên có thắc mắc: "${userText}"
@@ -2056,20 +2129,8 @@ Nếu thắc mắc không liên quan đến học tập hoặc môn học, hãy 
 Trả lời bằng tiếng Việt, có thể sử dụng markdown đơn giản.
             `.trim();
 
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }]
-                    })
-                });
-                const data = await response.json();
-                return data.candidates[0].content.parts[0].text;
-            } catch (error) {
-                return "❌ Lỗi: " + error.message;
-            }
+            const result = await callGemini(prompt, ["gemini-2.5-flash", "gemini-2.0-flash"]);
+            return result.ok ? result.text : result.message;
         }
 
         aiChatFab.addEventListener("click", () => {
