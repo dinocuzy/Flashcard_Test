@@ -2977,6 +2977,21 @@
             return 0;
         }
 
+        function getRetrySecondsFromHeader(response) {
+            if (!response || !response.headers) return 0;
+            const raw = response.headers.get("retry-after");
+            if (!raw) return 0;
+            const asNumber = Number(raw);
+            if (Number.isFinite(asNumber) && asNumber > 0) return Math.ceil(asNumber);
+
+            const asDate = new Date(raw).getTime();
+            if (Number.isFinite(asDate)) {
+                const diffMs = asDate - Date.now();
+                if (diffMs > 0) return Math.ceil(diffMs / 1000);
+            }
+            return 0;
+        }
+
         function parseGeminiErrorMessage(errorText) {
             const text = String(errorText || "");
             const lower = text.toLowerCase();
@@ -3032,18 +3047,29 @@
                         })
                     });
 
-                    const data = await response.json();
+                    let data = null;
+                    try {
+                        data = await response.json();
+                    } catch (_) {
+                        data = null;
+                    }
 
                     if (!response.ok) {
+                        const retryFromHeader = getRetrySecondsFromHeader(response);
                         const errText = data?.error?.message || `HTTP ${response.status}`;
                         lastError = errText;
                         const lower = errText.toLowerCase();
 
                         const shouldTryNextModel =
+                            response.status === 429 ||
                             lower.includes("not found") ||
                             lower.includes("does not exist") ||
                             lower.includes("unsupported") ||
                             lower.includes("permission");
+
+                        if (retryFromHeader > 0) {
+                            aiRetryAt = Date.now() + retryFromHeader * 1000;
+                        }
 
                         if (shouldTryNextModel) {
                             continue;
@@ -3093,25 +3119,27 @@ Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdow
         }
 
         async function handleShowAI(qId, userChoice = "") {
-            // Clear auto-proceed timer if in Game Mode
-            if (gameTimer) {
-                clearTimeout(gameTimer);
-                gameTimer = null;
-            }
+            try {
+                // Clear auto-proceed timer if in Game Mode
+                if (gameTimer) {
+                    clearTimeout(gameTimer);
+                    gameTimer = null;
+                }
 
-            const q = quizData.find(item => item.id === qId);
-            if (!q) return;
+                const q = quizData.find(item => item.id === qId);
+                if (!q) return;
 
-            const container = document.getElementById(`ai-container-${qId}`);
-            if (!container) return;
+                const container = document.getElementById(`ai-container-${qId}`);
+                if (!container) return;
 
-            container.innerHTML = `<div class="ai-explanation-card"><div class="ai-loading"></div> Đang kết nối với Gemini AI...</div>`;
-            container.style.display = "block";
+                container.innerHTML = `<div class="ai-explanation-card"><div class="ai-loading"></div> Đang kết nối với Gemini AI...</div>`;
+                container.style.display = "block";
 
-            const explanation = await fetchAIExplanation(q, userChoice);
-            if (explanation) {
-                // Convert simple markdown-like elements
-                const formatted = explanation
+                const explanation = await fetchAIExplanation(q, userChoice);
+                if (!explanation) return;
+
+                const text = typeof explanation === "string" ? explanation : JSON.stringify(explanation);
+                const formatted = text
                     .replace(/\n/g, "<br>")
                     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
                     .replace(/\*(.*?)\*/g, "<em>$1</em>");
@@ -3119,9 +3147,22 @@ Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdow
                 container.innerHTML = `
                     <div class="ai-explanation-card">
                         ${formatted}
-                        ${mode === "game" ? `<button class="btn-primary" style="margin-top:15px; width:100%" onclick="nextGameQuestion()">Tiếp tục học ➔</button>` : ""}
                     </div>
                 `;
+
+                if (mode === "game") {
+                    const aiBtnSlot = document.getElementById(`ai-btn-slot-${q.id}`);
+                    if (aiBtnSlot) {
+                        aiBtnSlot.innerHTML = `<button class="btn-primary" onclick="nextGameQuestion()">Tiếp tục học ➔</button>`;
+                    }
+                }
+            } catch (error) {
+                const msg = error && error.message ? error.message : "Lỗi không xác định khi hiển thị AI.";
+                const container = document.getElementById(`ai-container-${qId}`);
+                if (container) {
+                    container.style.display = "block";
+                    container.innerHTML = `<div class="ai-explanation-card">❌ ${escapeHtml(msg)}</div>`;
+                }
             }
         }
 
@@ -3237,23 +3278,34 @@ Trả lời bằng tiếng Việt, markdown đơn giản.
         });
 
         async function handleSendChat() {
-            const text = chatInput.value.trim();
-            if (!text) return;
+            let loadingDiv = null;
+            try {
+                const text = chatInput.value.trim();
+                if (!text) return;
 
-            chatInput.value = "";
-            addChatMessage("user", text);
+                chatInput.value = "";
+                addChatMessage("user", text);
 
-            const loadingDiv = document.createElement("div");
-            loadingDiv.className = "chat-msg msg-ai";
-            loadingDiv.innerHTML = `<div class="ai-loading"></div> Đang trả lời...`;
-            chatMessages.appendChild(loadingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+                loadingDiv = document.createElement("div");
+                loadingDiv.className = "chat-msg msg-ai";
+                loadingDiv.innerHTML = `<div class="ai-loading"></div> Đang trả lời...`;
+                chatMessages.appendChild(loadingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            const response = await sendChatToGemini(text);
-            chatMessages.removeChild(loadingDiv);
+                const response = await sendChatToGemini(text);
+                if (loadingDiv && loadingDiv.parentNode === chatMessages) {
+                    chatMessages.removeChild(loadingDiv);
+                }
 
-            if (response) {
-                addChatMessage("ai", response);
+                if (response) {
+                    addChatMessage("ai", response);
+                }
+            } catch (error) {
+                if (loadingDiv && loadingDiv.parentNode === chatMessages) {
+                    chatMessages.removeChild(loadingDiv);
+                }
+                const msg = error && error.message ? error.message : "Lỗi không xác định khi gửi chat.";
+                addChatMessage("ai", `❌ ${msg}`);
             }
         }
 
