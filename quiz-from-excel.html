@@ -363,14 +363,16 @@
         .question-head {
             display: flex;
             gap: 10px;
-            align-items: baseline;
+            align-items: flex-start;
             margin-bottom: 8px;
         }
 
         .q-index {
-            min-width: 30px;
+            min-width: 34px;
             font-weight: 700;
             color: var(--accent);
+            line-height: 1.35;
+            margin-top: 1px;
         }
 
         .q-main {
@@ -412,8 +414,15 @@
         }
 
         .option input {
-            margin-top: 3px;
+            margin-top: 2px;
             accent-color: var(--accent);
+            flex: 0 0 auto;
+        }
+
+        .option-text {
+            flex: 1;
+            line-height: 1.45;
+            word-break: break-word;
         }
 
         .option.correct {
@@ -431,6 +440,10 @@
             font-size: 14px;
             color: #345;
             display: none;
+            border: 1px solid rgba(179, 201, 255, 0.58);
+            border-radius: 14px;
+            padding: 12px;
+            background: rgba(248, 252, 255, 0.72);
         }
 
         .answers.show {
@@ -480,6 +493,15 @@
 
             .q-main {
                 font-size: 18px;
+            }
+
+            .question-card,
+            .flash-face {
+                padding: 18px 16px;
+            }
+
+            .option {
+                padding: 10px;
             }
         }
 
@@ -773,7 +795,7 @@
         }
 
         .ai-explanation-card::before {
-            content: "✨ AI Insight (SWT-PTIT)";
+            content: "✨ AI Insight (SWR301-FPT)";
             display: block;
             font-weight: 800;
             font-size: 0.85rem;
@@ -941,7 +963,7 @@
     <div class="container">
         <section class="hero stage-reveal" data-parallax="9">
             <div id="aiStatusBadge" class="ai-status-badge">
-                <span>✨ AI Tutor (SWT PTIT) is Ready!</span>
+                <span>✨ AI Tutor (SWR301 FPT) is Ready!</span>
                 <span style="font-size: 0.8rem; opacity: 0.8;">(Click to set Key)</span>
             </div>
             <h1>Quiz động từ Excel</h1>
@@ -966,29 +988,27 @@
                 <button id="toggleAnswersBtn" class="btn-outline" disabled>Hiện đáp án</button>
                 <button id="aiSettingsBtn" class="ai-settings-btn" title="Cài đặt AI">✨ AI</button>
             </div>
-    </div>
+            <div id="status" class="status"></div>
+            <div class="tiny mt-10">
+                Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
+                Câu trả lời (Dịch)
+            </div>
+        </section>
 
-    <div id="status" class="status"></div>
-    <div class="tiny mt-10">
-        Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
-        Câu trả lời (Dịch)
-    </div>
-    </section>
-
-    <section id="summary" class="summary stage-reveal" data-parallax="6"></section>
-    <section id="flashControls" class="flash-controls stage-reveal" data-parallax="5">
-        <button id="prevCardBtn" class="btn-primary" disabled>Trước</button>
-        <button id="nextCardBtn" class="btn-primary" disabled>Sau</button>
-        <div id="flashMeta" class="flash-meta"></div>
-    </section>
-    <section id="quizContainer" class="grid stage-reveal"></section>
+        <section id="summary" class="summary stage-reveal" data-parallax="6"></section>
+        <section id="flashControls" class="flash-controls stage-reveal" data-parallax="5">
+            <button id="prevCardBtn" class="btn-primary" disabled>Trước</button>
+            <button id="nextCardBtn" class="btn-primary" disabled>Sau</button>
+            <div id="flashMeta" class="flash-meta"></div>
+        </section>
+        <section id="quizContainer" class="grid stage-reveal"></section>
     </div>
 
     <!-- AI Settings Modal -->
     <div id="aiModal">
         <div class="ai-modal-content">
             <h3 style="margin-top:0">Cài đặt Gemini AI ✨</h3>
-            <p class="tiny">Nhập Google Gemini API Key để nhận giải thích tự động cho môn SWT (PTIT).</p>
+            <p class="tiny">Nhập Google Gemini API Key để nhận giải thích tự động cho môn SWR301 (FPT).</p>
             <input type="password" id="aiApiKey" class="ai-key-input" placeholder="Nhập API Key tại đây..." />
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
                 <button id="closeAiModal" class="btn-outline" style="color:#666; border-color:#ccc">Hủy</button>
@@ -1003,12 +1023,13 @@
     <div id="aiChatFab" title="Hỏi đáp cùng AI Tutor">✨</div>
     <div id="aiChatWindow">
         <div class="chat-header">
-            <span>✨ AI Tutor - SWT PTIT</span>
+            <span>✨ AI Tutor - SWR301 FPT</span>
             <button id="closeChatBtn"
                 style="background:transparent; border:none; color:white; font-size:20px; cursor:pointer;">×</button>
         </div>
         <div id="chatMessages" class="chat-messages">
-            <div class="chat-msg msg-ai">Chào bạn! Mình là AI Tutor môn SWT. Bạn có thắc mắc gì về bài học hay câu hỏi
+            <div class="chat-msg msg-ai">Chào bạn! Mình là AI Tutor môn SWR301. Bạn có thắc mắc gì về bài học hay câu
+                hỏi
                 nào cần giải đáp không? 📚</div>
         </div>
         <div class="chat-input-area">
@@ -1343,7 +1364,7 @@
                         return `
                             <label class="option" data-key="${escapeHtml(key)}">
                                 <input id="${inputId}" name="${inputName}" type="${inputType}" value="${escapeHtml(key)}" />
-                <span>${opt}</span>
+                                <span class="option-text">${escapeHtml(opt)}</span>
               </label>
             `;
                     })
@@ -1357,7 +1378,7 @@
           <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
           <div class="options">${optionsHtml}</div>
           <div class="answers ${answersVisible ? "show" : ""}">
-            <button class="btn-ai" style="margin-bottom:10px" onclick="handleShowAI(${q.id})">✨ Giải thích AI (SWT PTIT)</button>
+                        <button class="btn-ai" style="margin-bottom:10px" onclick="handleShowAI(${q.id})">✨ Giải thích AI (SWR301 FPT)</button>
             <div id="ai-container-${q.id}" style="display:none; margin-bottom:10px;"></div>
             <strong>Đáp án gốc:</strong> ${escapeHtml(q.originalAnswer || "(trống)")}<br/>
             <strong>Đáp án dịch:</strong> ${escapeHtml(q.vietnameseAnswer || "(trống)")}
@@ -1892,8 +1913,8 @@
             }
 
             const prompt = `
-Bạn là một chuyên gia về Kiểm thử phần mềm (Software Testing). 
-Hãy giải thích câu hỏi trắc nghiệm dưới đây theo chương trình đào tạo của Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+Bạn là một trợ giảng môn SWR301 (Software Requirements) của Đại học FPT.
+Hãy giải thích câu hỏi trắc nghiệm dưới đây theo đúng ngữ cảnh môn SWR301 tại FPT.
 
 Câu hỏi: ${q.originalQuestion}
 Dịch: ${q.vietnameseQuestion || "(không có dịch)"}
@@ -1904,11 +1925,11 @@ ${q.options.join("\n")}
 ${userChoice ? `Người dùng chọn: ${userChoice}` : ""}
 
 Hãy giải thích:
-1. Tại sao đáp án trên là đúng nhất dựa trên lý thuyết kiểm thử (V-model, Agile, Testing levels, White-box/Black-box, v.v.).
+1. Tại sao đáp án trên là đúng nhất dựa trên kiến thức SWR301 (yêu cầu chức năng/phi chức năng, elicitation, use case, user story, traceability, validation/verification, v.v.).
 2. Giải thích nhanh tại sao các lựa chọn khác chưa chính xác.
 3. Nhắc lại kiến thức trọng tâm liên quan đến câu hỏi này.
 
-Trả lời bằng hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdown, ngắn gọn, chuyên nghiệp và đúng trọng tâm môn SWT của PTIT.
+Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdown, ngắn gọn, chuyên nghiệp và đúng trọng tâm môn SWR301 của FPT.
             `.trim();
 
             try {
@@ -1993,7 +2014,7 @@ Trả lời bằng hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng 
             const key = getApiKey();
             if (key) {
                 badge.classList.add("active");
-                badge.innerHTML = `<span>✅ AI Tutor Active</span> <span style="font-size: 0.8rem; opacity: 0.8;">(PTIT SWT Expert)</span>`;
+                badge.innerHTML = `<span>✅ AI Tutor Active</span> <span style="font-size: 0.8rem; opacity: 0.8;">(FPT SWR301 Expert)</span>`;
             } else {
                 badge.classList.remove("active");
                 badge.innerHTML = `<span>✨ AI Tutor is Ready!</span> <span style="font-size: 0.8rem; opacity: 0.8;">(Click to set Key)</span>`;
@@ -2027,10 +2048,10 @@ Trả lời bằng hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng 
             }
 
             const prompt = `
-Bạn là một chuyên gia/giảng viên hướng dẫn môn Kiểm thử phần mềm (Software Testing) tại Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+Bạn là một chuyên gia/giảng viên hướng dẫn môn SWR301 (Software Requirements) tại Đại học FPT.
 Sinh viên có thắc mắc: "${userText}"
 
-Hãy trả lời một cách súc tích, dễ hiểu, chuyên nghiệp và bám sát kiến thức môn SWT của PTIT.
+Hãy trả lời một cách súc tích, dễ hiểu, chuyên nghiệp và bám sát kiến thức môn SWR301 của FPT.
 Nếu thắc mắc không liên quan đến học tập hoặc môn học, hãy nhắc nhở sinh viên tập trung vào môn học một cách lịch sự.
 Trả lời bằng tiếng Việt, có thể sử dụng markdown đơn giản.
             `.trim();
