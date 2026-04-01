@@ -651,10 +651,138 @@
             100% { transform: scale(1); }
         }
     
+        .ai-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(108, 92, 231, 0.15);
+            color: #6c5ce7;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            border: 1px solid rgba(108, 92, 231, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .ai-status-badge:hover {
+            background: rgba(108, 92, 231, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .ai-status-badge.active {
+            background: rgba(39, 174, 96, 0.15);
+            color: #27ae60;
+            border-color: rgba(39, 174, 96, 0.3);
+        }
+
         @media (max-width: 600px) {
             .game-option {
                 flex: 1 1 100%;
             }
+        }
+
+        /* ===== AI STYLING ===== */
+        .ai-settings-btn {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 18px;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3);
+        }
+
+        .ai-settings-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+
+        #aiModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #aiModal.show {
+            display: flex;
+        }
+
+        .ai-modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 24px;
+            width: min(400px, 90vw);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .ai-key-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--ring);
+            margin: 12px 0;
+            font-family: monospace;
+        }
+
+        .ai-explanation-card {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #a29bfe;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(108, 92, 231, 0.1);
+            animation: fadeIn 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-explanation-card::before {
+            content: "✨ AI Insight (SWT-PTIT)";
+            display: block;
+            font-weight: 800;
+            font-size: 0.85rem;
+            color: #6c5ce7;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .ai-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(108, 92, 231, 0.3);
+            border-radius: 50%;
+            border-top-color: #6c5ce7;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn-ai {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            margin-top: 10px;
+            border: none;
         }
     </style>
 </head>
@@ -662,6 +790,10 @@
 <body>
     <div class="container">
         <section class="hero stage-reveal" data-parallax="9">
+            <div id="aiStatusBadge" class="ai-status-badge">
+                <span>✨ AI Tutor (SWT PTIT) is Ready!</span>
+                <span style="font-size: 0.8rem; opacity: 0.8;">(Click to set Key)</span>
+            </div>
             <h1>Quiz động từ Excel</h1>
             <p>Upload file .xlsx/.xls theo cấu trúc cột trong ảnh để tự động hiển thị câu hỏi, chọn đáp án và chấm điểm.
             </p>
@@ -682,6 +814,8 @@
                 <button id="submitBtn" class="btn-success" disabled>Nộp bài</button>
                 <button id="resetTestBtn" class="btn-primary" disabled>Làm lại test</button>
                 <button id="toggleAnswersBtn" class="btn-outline" disabled>Hiện đáp án</button>
+                <button id="aiSettingsBtn" class="ai-settings-btn" title="Cài đặt AI">✨ AI</button>
+            </div>
             </div>
 
             <div id="status" class="status"></div>
@@ -700,6 +834,20 @@
         <section id="quizContainer" class="grid stage-reveal"></section>
     </div>
 
+    <!-- AI Settings Modal -->
+    <div id="aiModal">
+        <div class="ai-modal-content">
+            <h3 style="margin-top:0">Cài đặt Gemini AI ✨</h3>
+            <p class="tiny">Nhập Google Gemini API Key để nhận giải thích tự động cho môn SWT (PTIT).</p>
+            <input type="password" id="aiApiKey" class="ai-key-input" placeholder="Nhập API Key tại đây..." />
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+                <button id="closeAiModal" class="btn-outline" style="color:#666; border-color:#ccc">Hủy</button>
+                <button id="saveAiKey" class="btn-primary">Lưu Key</button>
+            </div>
+            <p class="tiny" style="margin-top:15px; color:#e74c3c">⚠️ Lưu ý: Key được lưu trong trình duyệt của bạn (localStorage), không lưu vào file.</p>
+        </div>
+    </div>
+
     <script>
         const fileInput = document.getElementById("fileInput");
         const modeSelect = document.getElementById("modeSelect");
@@ -708,6 +856,11 @@
         const submitBtn = document.getElementById("submitBtn");
         const resetTestBtn = document.getElementById("resetTestBtn");
         const toggleAnswersBtn = document.getElementById("toggleAnswersBtn");
+        const aiSettingsBtn = document.getElementById("aiSettingsBtn");
+        const aiModal = document.getElementById("aiModal");
+        const aiApiKeyInput = document.getElementById("aiApiKey");
+        const saveAiKeyBtn = document.getElementById("saveAiKey");
+        const closeAiModalBtn = document.getElementById("closeAiModal");
         const statusEl = document.getElementById("status");
         const quizContainer = document.getElementById("quizContainer");
         const summaryEl = document.getElementById("summary");
@@ -732,6 +885,8 @@
         let flashFlipped = false;
         let currentSection = 0;
         let sourceFileName = "";
+        let aiApiKey = localStorage.getItem("gemini_api_key") || "";
+        let gameTimer = null;
 
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v2";
@@ -1027,6 +1182,8 @@
           <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
           <div class="options">${optionsHtml}</div>
           <div class="answers ${answersVisible ? "show" : ""}">
+            <button class="btn-ai" style="margin-bottom:10px" onclick="handleShowAI(${q.id})">✨ Giải thích AI (SWT PTIT)</button>
+            <div id="ai-container-${q.id}" style="display:none; margin-bottom:10px;"></div>
             <strong>Đáp án gốc:</strong> ${escapeHtml(q.originalAnswer || "(trống)")}<br/>
             <strong>Đáp án dịch:</strong> ${escapeHtml(q.vietnameseAnswer || "(trống)")}
           </div>
@@ -1067,6 +1224,8 @@
           </div>
           <div class="flash-face flash-back">
             <h3 style="margin-top: 0;">Đáp án</h3>
+            <button class="btn-ai" style="margin-bottom:10px; width:100%" onclick="event.stopPropagation(); handleShowAI(${q.id})">✨ Giải thích AI</button>
+            <div id="ai-container-${q.id}" style="display:none; margin-bottom:10px;"></div>
             <div><strong>Gốc:</strong> ${escapeHtml(q.originalAnswer || "(trống)")}</div>
             <div style="margin-top: 6px;"><strong>Dịch:</strong> ${escapeHtml(q.vietnameseAnswer || "(trống)")}</div>
             <div style="margin-top: 10px;"><strong>Options:</strong></div>
@@ -1127,8 +1286,11 @@
                   ${optionsHtml}
                 </div>
 
-                <div style="height: 40px; display:flex; justify-content:center; align-items:center;">
+                <div id="ai-container-${q.id}" style="display:none; margin-top:20px;"></div>
+
+                <div style="height: 60px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px;">
                    ${gameStreak >= 2 ? `<div class="game-streak-tag">🔥 STREAK: ${gameStreak}</div>` : ""}
+                   <div id="ai-btn-slot-${q.id}"></div>
                 </div>
               </div>
             `;
@@ -1482,7 +1644,14 @@
                             }
                         });
                     }
-                    setTimeout(nextGameQuestion, 800);
+                    
+                    // Show AI button after answer
+                    const aiBtnSlot = document.getElementById(`ai-btn-slot-${q.id}`);
+                    if (aiBtnSlot) {
+                        aiBtnSlot.innerHTML = `<button class="btn-ai" onclick="handleShowAI(${q.id}, '${escapeHtml(selected)}')">✨ Giải thích AI</button>`;
+                    }
+
+                    gameTimer = setTimeout(nextGameQuestion, isMulti ? 4000 : 3000);
                 } else {
                     if (selectedSet.has(selected)) {
                         selectedSet.delete(selected);
@@ -1514,7 +1683,15 @@
                     } else {
                         gameStreak = 0;
                     }
-                    setTimeout(nextGameQuestion, 1000);
+
+                    // Show AI button after multi-answer
+                    const aiBtnSlot = document.getElementById(`ai-btn-slot-${q.id}`);
+                    if (aiBtnSlot) {
+                        const userChoicesText = Array.from(selectedSet).join(", ");
+                        aiBtnSlot.innerHTML = `<button class="btn-ai" onclick="handleShowAI(${q.id}, '${escapeHtml(userChoicesText)}')">✨ Giải thích AI</button>`;
+                    }
+
+                    gameTimer = setTimeout(nextGameQuestion, 4000);
                 }
             }
         });
@@ -1526,6 +1703,143 @@
         if (!restoredFromCache) {
             loadDefaultExcelFromRepo();
         }
+        // ===== AI LOGIC =====
+        function getApiKey() {
+            return aiApiKey || localStorage.getItem("gemini_api_key") || "";
+        }
+
+        async function fetchAIExplanation(q, userChoice = "") {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                alert("Vui lòng cài đặt Gemini API Key trong phần ✨ AI.");
+                aiModal.classList.add("show");
+                return null;
+            }
+
+            const prompt = `
+Bạn là một chuyên gia về Kiểm thử phần mềm (Software Testing). 
+Hãy giải thích câu hỏi trắc nghiệm dưới đây theo chương trình đào tạo của Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+
+Câu hỏi: ${q.originalQuestion}
+Dịch: ${q.vietnameseQuestion || "(không có dịch)"}
+Các lựa chọn:
+${q.options.join("\n")}
+
+Đáp án đúng: ${q.originalAnswer} ${q.vietnameseAnswer ? `(Dịch: ${q.vietnameseAnswer})` : ""}
+${userChoice ? `Người dùng chọn: ${userChoice}` : ""}
+
+Hãy giải thích:
+1. Tại sao đáp án trên là đúng nhất dựa trên lý thuyết kiểm thử (V-model, Agile, Testing levels, White-box/Black-box, v.v.).
+2. Giải thích nhanh tại sao các lựa chọn khác chưa chính xác.
+3. Nhắc lại kiến thức trọng tâm liên quan đến câu hỏi này.
+
+Trả lời bằng hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdown, ngắn gọn, chuyên nghiệp và đúng trọng tâm môn SWT của PTIT.
+            `.trim();
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await response.json();
+                if (data.candidates && data.candidates[0].content.parts[0].text) {
+                    return data.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error(data.error?.message || "Không có phản hồi từ AI.");
+                }
+            } catch (error) {
+                console.error("AI Error:", error);
+                return "❌ Lỗi: " + error.message;
+            }
+        }
+
+        async function handleShowAI(qId, userChoice = "") {
+            // Clear auto-proceed timer if in Game Mode
+            if (gameTimer) {
+                clearTimeout(gameTimer);
+                gameTimer = null;
+            }
+
+            const q = quizData.find(item => item.id === qId);
+            if (!q) return;
+
+            const container = document.getElementById(`ai-container-${qId}`);
+            if (!container) return;
+
+            container.innerHTML = `<div class="ai-explanation-card"><div class="ai-loading"></div> Đang kết nối với Gemini AI...</div>`;
+            container.style.display = "block";
+
+            const explanation = await fetchAIExplanation(q, userChoice);
+            if (explanation) {
+                // Convert simple markdown-like elements
+                const formatted = explanation
+                    .replace(/\n/g, "<br>")
+                    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                    .replace(/\*(.*?)\*/g, "<em>$1</em>");
+                
+                container.innerHTML = `
+                    <div class="ai-explanation-card">
+                        ${formatted}
+                        ${mode === "game" ? `<button class="btn-primary" style="margin-top:15px; width:100%" onclick="nextGameQuestion()">Tiếp tục học ➔</button>` : ""}
+                    </div>
+                `;
+            }
+        }
+
+        aiSettingsBtn.addEventListener("click", () => {
+            aiApiKeyInput.value = aiApiKey;
+            aiModal.classList.add("show");
+        });
+
+        closeAiModalBtn.addEventListener("click", () => {
+            aiModal.classList.remove("show");
+        });
+
+        function saveAiKey(key) {
+            if (key) {
+                aiApiKey = key;
+                localStorage.setItem("gemini_api_key", key);
+                setStatus("ok", "Đã lưu Gemini API Key thành công.");
+                aiModal.classList.remove("show");
+                updateAiBadge();
+            } else {
+                alert("Vui lòng nhập API Key.");
+            }
+        }
+
+        function updateAiBadge() {
+            const badge = document.getElementById("aiStatusBadge");
+            if (!badge) return;
+            const key = getApiKey();
+            if (key) {
+                badge.classList.add("active");
+                badge.innerHTML = `<span>✅ AI Tutor Active</span> <span style="font-size: 0.8rem; opacity: 0.8;">(PTIT SWT Expert)</span>`;
+            } else {
+                badge.classList.remove("active");
+                badge.innerHTML = `<span>✨ AI Tutor is Ready!</span> <span style="font-size: 0.8rem; opacity: 0.8;">(Click to set Key)</span>`;
+            }
+        }
+
+        aiStatusBadge.addEventListener("click", () => {
+            aiApiKeyInput.value = aiApiKey;
+            aiModal.classList.add("show");
+        });
+
+        saveAiKeyBtn.addEventListener("click", () => {
+            saveAiKey(aiApiKeyInput.value.trim());
+        });
+
+        // Initialize badge
+        updateAiBadge();
+
+        aiModal.addEventListener("click", (e) => {
+            if (e.target === aiModal) aiModal.classList.remove("show");
+        });
         function nextGameQuestion() {
             gameIndex++;
             gameAnswered = false;
