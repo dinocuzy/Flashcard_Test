@@ -74,10 +74,14 @@
         }
 
         .container {
-            width: min(1080px, 92vw);
+            width: min(1380px, 95vw);
             margin: 28px auto 40px;
             position: relative;
             z-index: 1;
+            display: grid;
+            grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+            gap: 18px;
+            align-items: start;
         }
 
         .stage-reveal {
@@ -106,6 +110,12 @@
             -webkit-backdrop-filter: blur(22px) saturate(170%);
             backdrop-filter: blur(22px) saturate(170%);
             animation: slideUp 400ms ease-out;
+            position: sticky;
+            top: 18px;
+            max-height: calc(100vh - 36px);
+            overflow: auto;
+            grid-column: 1;
+            grid-row: 1 / span 4;
         }
 
         .hero h1 {
@@ -124,10 +134,20 @@
 
         .toolbar {
             display: grid;
-            grid-template-columns: 1fr auto auto auto auto auto auto auto;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-top: 16px;
             align-items: center;
+        }
+
+        .toolbar #fileInput,
+        .toolbar #loadBtn {
+            grid-column: 1 / -1;
+        }
+
+        .toolbar button,
+        .toolbar select {
+            width: 100%;
         }
 
         .toolbar>* {
@@ -242,6 +262,7 @@
             -webkit-backdrop-filter: blur(16px) saturate(160%);
             backdrop-filter: blur(16px) saturate(160%);
             animation: slideUp 300ms ease-out;
+            grid-column: 2;
         }
 
         .summary.show {
@@ -261,6 +282,7 @@
             box-shadow: var(--shadow);
             -webkit-backdrop-filter: blur(16px) saturate(160%);
             backdrop-filter: blur(16px) saturate(160%);
+            grid-column: 2;
         }
 
         .flash-controls.show {
@@ -279,6 +301,27 @@
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr));
             gap: 20px;
             justify-content: center;
+            grid-column: 2;
+        }
+
+        body[data-mode="test"] .grid {
+            grid-template-columns: 1fr;
+        }
+
+        body[data-mode="flashcard"] .hero {
+            background:
+                linear-gradient(160deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.12)),
+                linear-gradient(135deg, rgba(36, 96, 255, 0.44), rgba(40, 186, 225, 0.3));
+        }
+
+        body[data-mode="game"] .hero {
+            background:
+                linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12)),
+                linear-gradient(135deg, rgba(25, 151, 124, 0.55), rgba(57, 202, 146, 0.35));
+        }
+
+        body[data-mode="game"] .grid {
+            margin-top: 12px;
         }
 
         .question-card {
@@ -425,6 +468,30 @@
             word-break: break-word;
         }
 
+        .multi-hint {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(130, 174, 255, 0.56);
+            background: rgba(238, 246, 255, 0.88);
+            color: #1e57bf;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 10px;
+        }
+
+        .multi-hint.ready {
+            border-color: rgba(84, 192, 141, 0.66);
+            background: rgba(226, 252, 240, 0.92);
+            color: #10653f;
+        }
+
+        .question-card.needs-more {
+            border-color: rgba(245, 180, 77, 0.75);
+        }
+
         .option.correct {
             border-color: rgba(106, 221, 172, 0.86);
             background: rgba(227, 253, 239, 0.84);
@@ -521,6 +588,26 @@
             body::after {
                 filter: blur(34px);
                 opacity: 0.8;
+            }
+
+            .container {
+                width: min(1080px, 94vw);
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            .hero {
+                position: static;
+                max-height: unset;
+                overflow: visible;
+                grid-column: auto;
+                grid-row: auto;
+            }
+
+            .summary,
+            .flash-controls,
+            .grid {
+                grid-column: auto;
             }
 
             .toolbar {
@@ -1684,6 +1771,30 @@
                     optEl.classList.add("wrong");
                 }
             });
+
+            updateMultiSelectionUi(card, q, selected);
+        }
+
+        function updateMultiSelectionUi(card, q, selectedSetArg) {
+            if (!card || !q || q.answerLabels.size <= 1) return;
+            const selectedSet = selectedSetArg || new Set();
+            if (!selectedSetArg) {
+                card.querySelectorAll(".option input:checked").forEach((input) => {
+                    const opt = input.closest(".option");
+                    const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
+                    selectedSet.add(key);
+                });
+            }
+
+            const required = q.answerLabels.size;
+            const countEl = card.querySelector("[data-role='multi-count']");
+            const hintEl = card.querySelector(".multi-hint");
+            if (!countEl || !hintEl) return;
+
+            countEl.textContent = String(selectedSet.size);
+            const isReady = selectedSet.size >= required;
+            hintEl.classList.toggle("ready", isReady);
+            card.classList.toggle("needs-more", selectedSet.size > 0 && !isReady);
         }
 
         function renderTestMode() {
@@ -1707,6 +1818,9 @@
 
                 const isMulti = q.answerLabels.size > 1;
                 const inputType = isMulti ? "checkbox" : "radio";
+                const multiHint = isMulti
+                    ? `<div class="multi-hint">Chọn ${q.answerLabels.size} đáp án • Đã chọn <span data-role="multi-count">0</span>/${q.answerLabels.size}</div>`
+                    : "";
 
                 const optionsHtml = q.options
                     .map((opt, idx) => {
@@ -1728,6 +1842,7 @@
             <h2 class="q-main">${escapeHtml(q.originalQuestion)}</h2>
           </div>
           <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
+                    ${multiHint}
           <div class="options">${optionsHtml}</div>
           <div class="answers ${answersVisible ? "show" : ""}">
                         <button class="btn-ai" style="margin-bottom:10px" onclick="handleShowAI(${q.id})">✨ Giải thích AI (SWR301 FPT)</button>
@@ -1945,6 +2060,7 @@
             const hasData = quizData.length > 0;
             const isFlash = mode === "flashcard";
             const isGame = mode === "game";
+            document.body.setAttribute("data-mode", mode);
 
             // Hide/Show Test controls
             const testControls = [submitBtn, resetTestBtn, toggleAnswersBtn];
@@ -2315,7 +2431,9 @@
                 const key = opt ? (opt.getAttribute("data-key") || item.value) : item.value;
                 selectedNow.add(key);
             });
+            updateMultiSelectionUi(card, q, selected);
             const isAnsweredNow = selectedNow.size > 0;
+            updateMultiSelectionUi(card, q, selectedNow);
 
             if (practiceMode) {
                 gradeSingleTestCard(card, q);
