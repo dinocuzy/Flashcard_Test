@@ -3060,8 +3060,16 @@
                         lastError = errText;
                         const lower = errText.toLowerCase();
 
+                        if (response.status === 429) {
+                            const retrySec = retryFromHeader > 0 ? retryFromHeader : Math.max(30, extractRetrySeconds(errText) || 60);
+                            aiRetryAt = Date.now() + retrySec * 1000;
+                            return {
+                                ok: false,
+                                message: `⚠️ Gemini đang quá tải hoặc hết quota. Vui lòng thử lại sau ${retrySec}s.`
+                            };
+                        }
+
                         const shouldTryNextModel =
-                            response.status === 429 ||
                             lower.includes("not found") ||
                             lower.includes("does not exist") ||
                             lower.includes("unsupported") ||
@@ -3113,7 +3121,7 @@ Hãy giải thích:
 Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdown, ngắn gọn, chuyên nghiệp và đúng trọng tâm môn SWR301 của FPT.
             `.trim();
 
-            const result = await callGemini(prompt, ["gemini-2.0-flash", "gemini-2.5-flash"]);
+            const result = await callGemini(prompt, ["gemini-2.5-flash"]);
             if (!result.ok) return result.message;
             return result.text;
         }
@@ -3265,7 +3273,7 @@ Quy tắc bắt buộc khi trả lời:
 Trả lời bằng tiếng Việt, markdown đơn giản.
             `.trim();
 
-            const result = await callGemini(prompt, ["gemini-2.5-flash", "gemini-2.0-flash"]);
+            const result = await callGemini(prompt, ["gemini-2.5-flash"]);
             return result.ok ? result.text : result.message;
         }
 
@@ -3319,6 +3327,15 @@ Trả lời bằng tiếng Việt, markdown đơn giản.
 
         // Initialize badge
         updateAiBadge();
+
+        window.addEventListener("unhandledrejection", (event) => {
+            const reason = event && event.reason;
+            const message = reason && reason.message ? reason.message : String(reason || "Lỗi Promise không xác định");
+            if (message === "undefined" || message.includes("quota") || message.includes("429")) {
+                setStatus("warn", "AI đang bị giới hạn tạm thời (quota/rate). Vui lòng đợi rồi thử lại.");
+            }
+            event.preventDefault();
+        });
 
         aiModal.addEventListener("click", (e) => {
             if (e.target === aiModal) aiModal.classList.remove("show");
