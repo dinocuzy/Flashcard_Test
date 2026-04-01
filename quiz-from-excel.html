@@ -132,6 +132,44 @@
             text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
+        .mode-skin {
+            margin-top: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.52);
+            border-radius: 16px;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.16);
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px;
+            align-items: center;
+            color: #f4f9ff;
+        }
+
+        .mode-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            background: rgba(255, 255, 255, 0.24);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .mode-title {
+            font-size: 14px;
+            font-weight: 800;
+            line-height: 1.2;
+            color: #ffffff;
+        }
+
+        .mode-desc {
+            margin-top: 2px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
         .toolbar {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -314,14 +352,37 @@
                 linear-gradient(135deg, rgba(36, 96, 255, 0.44), rgba(40, 186, 225, 0.3));
         }
 
+        body[data-mode="test"] .mode-skin {
+            background: linear-gradient(135deg, rgba(46, 120, 255, 0.34), rgba(85, 158, 255, 0.2));
+        }
+
         body[data-mode="game"] .hero {
             background:
                 linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12)),
                 linear-gradient(135deg, rgba(25, 151, 124, 0.55), rgba(57, 202, 146, 0.35));
         }
 
+        body[data-mode="flashcard"] .mode-skin {
+            background: linear-gradient(135deg, rgba(39, 115, 255, 0.3), rgba(60, 193, 221, 0.22));
+        }
+
+        body[data-mode="game"] .mode-skin {
+            background: linear-gradient(135deg, rgba(20, 151, 120, 0.34), rgba(74, 207, 156, 0.24));
+        }
+
         body[data-mode="game"] .grid {
             margin-top: 12px;
+        }
+
+        .mode-panel {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 220ms ease, transform 280ms ease;
+        }
+
+        .mode-panel.switching {
+            opacity: 0;
+            transform: translateY(8px);
         }
 
         .question-card {
@@ -370,6 +431,22 @@
             transform-style: preserve-3d;
             transition: transform 360ms ease;
             min-height: 280px;
+        }
+
+        .flashcard-inner.nav-next {
+            animation: flashNextOut 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .flashcard-inner.nav-prev {
+            animation: flashPrevOut 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .flashcard-inner.enter-next {
+            animation: flashEnterFromRight 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .flashcard-inner.enter-prev {
+            animation: flashEnterFromLeft 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .flashcard-inner.flipped {
@@ -451,6 +528,11 @@
             backdrop-filter: blur(10px);
         }
 
+        .option.selected {
+            border-color: rgba(88, 152, 255, 0.95);
+            background: rgba(230, 241, 255, 0.92);
+        }
+
         .option:hover {
             transform: translateY(-1px);
             border-color: rgba(145, 184, 255, 0.9);
@@ -466,6 +548,36 @@
             flex: 1;
             line-height: 1.45;
             word-break: break-word;
+        }
+
+        .option-badge {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: #1d57c3;
+            background: rgba(220, 235, 255, 0.9);
+            border: 1px solid rgba(146, 183, 255, 0.88);
+            margin-top: 1px;
+            flex: 0 0 auto;
+        }
+
+        .multi-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-mini {
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .multi-hint {
@@ -486,6 +598,12 @@
             border-color: rgba(84, 192, 141, 0.66);
             background: rgba(226, 252, 240, 0.92);
             color: #10653f;
+        }
+
+        .multi-hint.over {
+            border-color: rgba(255, 152, 166, 0.75);
+            background: rgba(255, 236, 240, 0.92);
+            color: #9c2131;
         }
 
         .question-card.needs-more {
@@ -686,6 +804,54 @@
             to {
                 opacity: 1;
                 transform: translateY(0);
+            }
+        }
+
+        @keyframes flashNextOut {
+            from {
+                opacity: 1;
+                transform: rotateY(0deg) translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: rotateY(-24deg) translateX(-16px);
+            }
+        }
+
+        @keyframes flashPrevOut {
+            from {
+                opacity: 1;
+                transform: rotateY(0deg) translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: rotateY(24deg) translateX(16px);
+            }
+        }
+
+        @keyframes flashEnterFromRight {
+            from {
+                opacity: 0;
+                transform: rotateY(-16deg) translateX(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: rotateY(0deg) translateX(0);
+            }
+        }
+
+        @keyframes flashEnterFromLeft {
+            from {
+                opacity: 0;
+                transform: rotateY(16deg) translateX(-16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: rotateY(0deg) translateX(0);
             }
         }
 
@@ -1105,6 +1271,13 @@
             <h1>Quiz động từ Excel</h1>
             <p>Upload file .xlsx/.xls theo cấu trúc cột trong ảnh để tự động hiển thị câu hỏi, chọn đáp án và chấm điểm.
             </p>
+            <div id="modeSkin" class="mode-skin">
+                <div id="modeIcon" class="mode-icon">📝</div>
+                <div>
+                    <div id="modeTitle" class="mode-title">Test Mode</div>
+                    <div id="modeDesc" class="mode-desc">Làm bài theo học phần, nộp bài để xem kết quả.</div>
+                </div>
+            </div>
 
             <div class="toolbar">
                 <label for="fileInput" class="sr-only">Chọn file Excel</label>
@@ -1223,6 +1396,9 @@
         const prevCardBtn = document.getElementById("prevCardBtn");
         const nextCardBtn = document.getElementById("nextCardBtn");
         const flashMeta = document.getElementById("flashMeta");
+        const modeIconEl = document.getElementById("modeIcon");
+        const modeTitleEl = document.getElementById("modeTitle");
+        const modeDescEl = document.getElementById("modeDesc");
         const heroEl = document.querySelector(".hero");
         const stageEls = document.querySelectorAll(".stage-reveal");
         const toolbarItems = document.querySelectorAll(".toolbar > *");
@@ -1242,6 +1418,10 @@
         let sourceFileName = "";
         let aiApiKey = localStorage.getItem("gemini_api_key") || "";
         let gameTimer = null;
+        let flashAnimating = false;
+        let testSequenceCache = { key: "", ids: [] };
+        let flashSequenceCache = { key: "", ids: [] };
+        let gameSequenceCache = { key: "", ids: [] };
 
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v2";
@@ -1273,6 +1453,7 @@
             answersVisible = false;
             flashIndex = 0;
             flashFlipped = false;
+            resetModeSequenceCaches();
             toggleAnswersBtn.textContent = "Hiện đáp án";
             populateSectionSelect();
             renderByMode();
@@ -1412,6 +1593,83 @@
         function getSectionData() {
             const start = currentSection * SECTION_SIZE;
             return quizData.slice(start, start + SECTION_SIZE);
+        }
+
+        function resetModeSequenceCaches() {
+            testSequenceCache = { key: "", ids: [] };
+            flashSequenceCache = { key: "", ids: [] };
+            gameSequenceCache = { key: "", ids: [] };
+        }
+
+        function getQuestionType(q) {
+            const isMulti = q.answerLabels.size > 1;
+            if (isMulti) return "multi";
+
+            if ((q.options || []).length === 2) {
+                const normalized = q.options.map((opt) => normalizeChoiceText(stripOptionPrefix(opt)));
+                const tfTokens = ["true", "false", "đúng", "sai", "yes", "no"];
+                const tfCount = normalized.filter((opt) => tfTokens.includes(opt)).length;
+                if (tfCount >= 1) return "tf";
+            }
+
+            return "single";
+        }
+
+        function getQuestionByIds(base, ids) {
+            const byId = new Map(base.map((q) => [q.id, q]));
+            return ids.map((id) => byId.get(id)).filter(Boolean);
+        }
+
+        function getQuestionPriorityScore(q, wrongBook, progressMap) {
+            const type = getQuestionType(q);
+            const wrongWeight = Number(wrongBook[String(q.id)] || 0);
+            const answered = (progressMap[String(q.id)] || []).length > 0;
+            const unansweredBoost = answered ? 0 : 2;
+            const typeBoost = type === "multi" ? 2 : (type === "single" ? 1 : 0);
+            return wrongWeight * 4 + unansweredBoost + typeBoost;
+        }
+
+        function buildBalancedSequence(candidates, wrongBook, progressMap, preferHardFirst = true) {
+            const groups = {
+                multi: [],
+                single: [],
+                tf: []
+            };
+
+            candidates.forEach((q) => {
+                const type = getQuestionType(q);
+                groups[type].push(q);
+            });
+
+            Object.keys(groups).forEach((type) => {
+                groups[type].sort((a, b) => {
+                    const sa = getQuestionPriorityScore(a, wrongBook, progressMap);
+                    const sb = getQuestionPriorityScore(b, wrongBook, progressMap);
+                    if (preferHardFirst && sb !== sa) return sb - sa;
+                    if (!preferHardFirst && sa !== sb) return sa - sb;
+                    return a.id - b.id;
+                });
+            });
+
+            const order = preferHardFirst
+                ? ["multi", "single", "tf"]
+                : ["single", "tf", "multi"];
+            const result = [];
+            let cursor = 0;
+            let added = true;
+
+            while (added) {
+                added = false;
+                order.forEach((type) => {
+                    if (groups[type][cursor]) {
+                        result.push(groups[type][cursor]);
+                        added = true;
+                    }
+                });
+                cursor += 1;
+            }
+
+            return result;
         }
 
         function populateSectionSelect() {
@@ -1631,20 +1889,101 @@
         function getTestSectionData() {
             const base = getSectionData();
             const wrongBook = loadWrongBook();
-            let list = base.slice();
+            const progress = loadTestProgressForSection();
+            const cacheKey = `${sourceFileName}|${currentSection}|${wrongOnlyMode}|${base.length}`;
 
+            if (testSequenceCache.key === cacheKey && testSequenceCache.ids.length) {
+                return getQuestionByIds(base, testSequenceCache.ids);
+            }
+
+            let list = base.slice();
             if (wrongOnlyMode) {
                 list = list.filter((q) => Number(wrongBook[String(q.id)] || 0) > 0);
             }
 
-            list.sort((a, b) => {
-                const wb = Number(wrongBook[String(b.id)] || 0);
-                const wa = Number(wrongBook[String(a.id)] || 0);
-                if (wb !== wa) return wb - wa;
-                return a.id - b.id;
-            });
+            const balanced = buildBalancedSequence(list, wrongBook, progress, true);
+            testSequenceCache = {
+                key: cacheKey,
+                ids: balanced.map((q) => q.id)
+            };
 
-            return list;
+            return balanced;
+        }
+
+        function getFlashcardSectionData() {
+            const base = getSectionData();
+            const wrongBook = loadWrongBook();
+            const progress = loadTestProgressForSection();
+            const cacheKey = `${sourceFileName}|${currentSection}|flash|${base.length}`;
+
+            if (flashSequenceCache.key === cacheKey && flashSequenceCache.ids.length) {
+                return getQuestionByIds(base, flashSequenceCache.ids);
+            }
+
+            const balanced = buildBalancedSequence(base.slice(), wrongBook, progress, true);
+            flashSequenceCache = {
+                key: cacheKey,
+                ids: balanced.map((q) => q.id)
+            };
+            return balanced;
+        }
+
+        function shuffleArray(arr) {
+            const out = arr.slice();
+            for (let i = out.length - 1; i > 0; i -= 1) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+
+        function getGameSectionData() {
+            const base = getSectionData();
+            const cacheKey = `${sourceFileName}|${currentSection}|game|${base.length}`;
+            if (gameSequenceCache.key === cacheKey && gameSequenceCache.ids.length) {
+                return getQuestionByIds(base, gameSequenceCache.ids);
+            }
+
+            const groups = {
+                single: [],
+                tf: [],
+                multi: []
+            };
+
+            base.forEach((q) => groups[getQuestionType(q)].push(q));
+            groups.single = shuffleArray(groups.single);
+            groups.tf = shuffleArray(groups.tf);
+            groups.multi = shuffleArray(groups.multi);
+
+            const ordered = [];
+            let cursor = 0;
+            let added = true;
+            const order = ["single", "tf", "multi"];
+
+            while (added) {
+                added = false;
+                order.forEach((type) => {
+                    if (groups[type][cursor]) {
+                        ordered.push(groups[type][cursor]);
+                        added = true;
+                    }
+                });
+                cursor += 1;
+            }
+
+            gameSequenceCache = {
+                key: cacheKey,
+                ids: ordered.map((q) => q.id)
+            };
+
+            return ordered;
+        }
+
+        function getGameQuestionBaseScore(q) {
+            const type = getQuestionType(q);
+            if (type === "multi") return 140;
+            if (type === "tf") return 80;
+            return 100;
         }
 
         function getProgressStorageKey() {
@@ -1792,9 +2131,38 @@
             if (!countEl || !hintEl) return;
 
             countEl.textContent = String(selectedSet.size);
-            const isReady = selectedSet.size >= required;
+            const isReady = selectedSet.size === required;
+            const isOver = selectedSet.size > required;
             hintEl.classList.toggle("ready", isReady);
-            card.classList.toggle("needs-more", selectedSet.size > 0 && !isReady);
+            hintEl.classList.toggle("over", isOver);
+            card.classList.toggle("needs-more", selectedSet.size > 0 && selectedSet.size < required);
+        }
+
+        function refreshOptionState(card) {
+            if (!card) return;
+            card.querySelectorAll(".option").forEach((optEl) => {
+                const input = optEl.querySelector("input");
+                optEl.classList.toggle("selected", Boolean(input && input.checked));
+            });
+        }
+
+        function clearCardSelections(card) {
+            if (!card) return;
+            card.querySelectorAll(".option input:checked").forEach((input) => {
+                input.checked = false;
+            });
+            refreshOptionState(card);
+        }
+
+        function trimMultiSelections(card, q) {
+            if (!card || !q || q.answerLabels.size <= 1) return;
+            const required = q.answerLabels.size;
+            const checked = Array.from(card.querySelectorAll(".option input:checked"));
+            if (checked.length <= required) return;
+            checked.slice(required).forEach((input) => {
+                input.checked = false;
+            });
+            refreshOptionState(card);
         }
 
         function renderTestMode() {
@@ -1822,14 +2190,23 @@
                     ? `<div class="multi-hint">Chọn ${q.answerLabels.size} đáp án • Đã chọn <span data-role="multi-count">0</span>/${q.answerLabels.size}</div>`
                     : "";
 
+                const multiActions = isMulti
+                    ? `<div class="multi-actions">
+                        <button type="button" class="btn-primary btn-mini" data-action="clear-multi">Xóa lựa chọn</button>
+                        <button type="button" class="btn-primary btn-mini" data-action="trim-multi">Bỏ chọn đáp án dư</button>
+                    </div>`
+                    : "";
+
                 const optionsHtml = q.options
                     .map((opt, idx) => {
                         const key = getOptionKey(opt);
                         const inputName = "q-" + q.id;
                         const inputId = inputName + "-" + idx;
+                        const label = extractLabel(opt) || String(idx + 1);
                         return `
                             <label class="option" data-key="${escapeHtml(key)}">
                                 <input id="${inputId}" name="${inputName}" type="${inputType}" value="${escapeHtml(key)}" />
+                                <span class="option-badge">${escapeHtml(label)}</span>
                                 <span class="option-text">${escapeHtml(opt)}</span>
               </label>
             `;
@@ -1843,6 +2220,7 @@
           </div>
           <p class="q-vi">${escapeHtml(q.vietnameseQuestion || "")}</p>
                     ${multiHint}
+                    ${multiActions}
           <div class="options">${optionsHtml}</div>
           <div class="answers ${answersVisible ? "show" : ""}">
                         <button class="btn-ai" style="margin-bottom:10px" onclick="handleShowAI(${q.id})">✨ Giải thích AI (SWR301 FPT)</button>
@@ -1856,6 +2234,7 @@
             });
 
             applyProgressToDom();
+            quizContainer.querySelectorAll(".question-card").forEach((card) => refreshOptionState(card));
             updateLearningStats();
         }
 
@@ -1864,7 +2243,7 @@
             summaryEl.className = "summary";
             summaryEl.innerHTML = "";
 
-            const sectionData = getSectionData();
+            const sectionData = getFlashcardSectionData();
 
             if (!sectionData.length) return;
 
@@ -1905,12 +2284,66 @@
             prevCardBtn.disabled = flashIndex <= 0;
             nextCardBtn.disabled = flashIndex >= sectionData.length - 1;
         }
+
+        function animateFlashTo(targetIndex, direction) {
+            const sectionData = getFlashcardSectionData();
+            if (mode !== "flashcard" || flashAnimating) return;
+            if (targetIndex < 0 || targetIndex >= sectionData.length) return;
+
+            const inner = quizContainer.querySelector(".flashcard-inner");
+            flashAnimating = true;
+
+            if (inner) {
+                inner.classList.add(direction === "next" ? "nav-next" : "nav-prev");
+            }
+
+            setTimeout(() => {
+                flashIndex = targetIndex;
+                flashFlipped = false;
+                renderFlashcardMode();
+
+                const newInner = quizContainer.querySelector(".flashcard-inner");
+                if (newInner) {
+                    newInner.classList.add(direction === "next" ? "enter-next" : "enter-prev");
+                    setTimeout(() => {
+                        newInner.classList.remove("enter-next", "enter-prev");
+                    }, 280);
+                }
+
+                flashAnimating = false;
+            }, 220);
+        }
+
+        function updateModeSkin() {
+            const skinMap = {
+                test: {
+                    icon: "📝",
+                    title: "Test Mode",
+                    desc: "Làm bài theo học phần, nộp bài để xem kết quả nhanh."
+                },
+                flashcard: {
+                    icon: "🧠",
+                    title: "Flashcard Mode",
+                    desc: "Lật thẻ ghi nhớ, xem nhanh câu hỏi và đáp án trọng tâm."
+                },
+                game: {
+                    icon: "🎮",
+                    title: "Game Mode",
+                    desc: "Trả lời nhanh để giữ streak và tăng điểm từng câu."
+                }
+            };
+
+            const skin = skinMap[mode] || skinMap.test;
+            if (modeIconEl) modeIconEl.textContent = skin.icon;
+            if (modeTitleEl) modeTitleEl.textContent = skin.title;
+            if (modeDescEl) modeDescEl.textContent = skin.desc;
+        }
         function renderGameMode() {
             quizContainer.innerHTML = "";
             summaryEl.className = "summary";
             summaryEl.innerHTML = "";
 
-            const sectionData = getSectionData();
+            const sectionData = getGameSectionData();
             const q = sectionData[gameIndex];
             if (!q) {
                 renderGameOver();
@@ -1968,8 +2401,9 @@
         }
 
         function renderGameOver() {
-            const sectionData = getSectionData();
-            const percent = ((gameScore / (sectionData.length * 100)) * 100).toFixed(0);
+            const sectionData = getGameSectionData();
+            const maxScore = sectionData.reduce((acc, q) => acc + getGameQuestionBaseScore(q), 0);
+            const percent = maxScore ? ((gameScore / maxScore) * 100).toFixed(0) : "0";
 
             quizContainer.innerHTML = `
               <div class="game-wrapper stage-reveal" style="text-align:center; padding: 40px 20px;">
@@ -2042,8 +2476,10 @@
         }
 
         function renderByMode() {
+            quizContainer.classList.add("mode-panel", "switching");
             if (!quizData.length) {
                 quizContainer.innerHTML = "";
+                requestAnimationFrame(() => quizContainer.classList.remove("switching"));
                 return;
             }
 
@@ -2054,6 +2490,10 @@
             } else {
                 renderTestMode();
             }
+
+            requestAnimationFrame(() => {
+                quizContainer.classList.remove("switching");
+            });
         }
 
         function syncModeUi() {
@@ -2061,6 +2501,7 @@
             const isFlash = mode === "flashcard";
             const isGame = mode === "game";
             document.body.setAttribute("data-mode", mode);
+            updateModeSkin();
 
             // Hide/Show Test controls
             const testControls = [submitBtn, resetTestBtn, toggleAnswersBtn];
@@ -2232,6 +2673,7 @@
             flashIndex = 0;
             flashFlipped = false;
             answersVisible = false;
+            resetModeSequenceCaches();
             toggleAnswersBtn.textContent = "Hiện đáp án";
             renderByMode();
             saveCache();
@@ -2253,6 +2695,7 @@
         wrongOnlyToggle.addEventListener("change", () => {
             wrongOnlyMode = wrongOnlyToggle.checked;
             localStorage.setItem(WRONG_ONLY_KEY, wrongOnlyMode ? "1" : "0");
+            resetModeSequenceCaches();
             saveCache();
             if (mode === "test") {
                 renderTestMode();
@@ -2273,6 +2716,7 @@
         modeSelect.addEventListener("change", () => {
             mode = modeSelect.value;
             flashFlipped = false;
+            resetModeSequenceCaches();
             // Reset game state when mode changes
             gameIndex = 0;
             gameScore = 0;
@@ -2304,24 +2748,50 @@
 
         prevCardBtn.addEventListener("click", () => {
             if (flashIndex <= 0) return;
-            flashIndex -= 1;
-            flashFlipped = false;
-            renderFlashcardMode();
+            animateFlashTo(flashIndex - 1, "prev");
         });
 
         nextCardBtn.addEventListener("click", () => {
-            const sectionData = getSectionData();
+            const sectionData = getFlashcardSectionData();
             if (flashIndex >= sectionData.length - 1) return;
-            flashIndex += 1;
-            flashFlipped = false;
-            renderFlashcardMode();
+            animateFlashTo(flashIndex + 1, "next");
         });
 
         quizContainer.addEventListener("click", (e) => {
             if (!quizData.length) return;
 
+            if (mode === "test") {
+                const actionBtn = e.target.closest("button[data-action]");
+                if (actionBtn) {
+                    const card = actionBtn.closest(".question-card");
+                    if (!card) return;
+                    const cardIndex = Array.from(quizContainer.children).indexOf(card);
+                    const q = getTestSectionData()[cardIndex];
+                    if (!q) return;
+
+                    const action = actionBtn.getAttribute("data-action");
+                    if (action === "clear-multi") {
+                        clearCardSelections(card);
+                    } else if (action === "trim-multi") {
+                        trimMultiSelections(card, q);
+                    }
+
+                    const selectedNow = new Set();
+                    card.querySelectorAll(".option input:checked").forEach((input) => {
+                        const opt = input.closest(".option");
+                        const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
+                        selectedNow.add(key);
+                    });
+                    updateMultiSelectionUi(card, q, selectedNow);
+                    saveTestProgressFromDom();
+                    updateLearningStats();
+                    return;
+                }
+            }
+
             // Handle Flashcard Flip
             if (mode === "flashcard") {
+                if (flashAnimating) return;
                 flashFlipped = !flashFlipped;
                 renderFlashcardMode();
                 return;
@@ -2335,7 +2805,7 @@
                 if (!option) return;
 
                 const selected = option.getAttribute("data-key");
-                const q = getSectionData()[gameIndex];
+                const q = getGameSectionData()[gameIndex];
                 if (!q) return;
 
                 const isMulti = q.answerLabels.size > 1;
@@ -2346,7 +2816,7 @@
 
                     if (isCorrect) {
                         option.classList.add("correct");
-                        gameScore += 100;
+                        gameScore += getGameQuestionBaseScore(q);
                         gameStreak++;
                     } else {
                         option.classList.add("wrong");
@@ -2392,7 +2862,7 @@
                     });
 
                     if (isCorrect) {
-                        gameScore += 100;
+                        gameScore += getGameQuestionBaseScore(q);
                         gameStreak++;
                     } else {
                         gameStreak = 0;
@@ -2431,8 +2901,8 @@
                 const key = opt ? (opt.getAttribute("data-key") || item.value) : item.value;
                 selectedNow.add(key);
             });
-            updateMultiSelectionUi(card, q, selected);
             const isAnsweredNow = selectedNow.size > 0;
+            refreshOptionState(card);
             updateMultiSelectionUi(card, q, selectedNow);
 
             if (practiceMode) {
@@ -2484,6 +2954,7 @@
 
         const restoredFromCache = tryRestoreCache();
         if (!restoredFromCache) {
+            resetModeSequenceCaches();
             loadDefaultExcelFromRepo();
         }
         // ===== AI LOGIC =====
