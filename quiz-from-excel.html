@@ -784,6 +784,127 @@
             margin-top: 10px;
             border: none;
         }
+
+        /* ===== AI CHAT BUBBLE ===== */
+        #aiChatFab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px rgba(108, 92, 231, 0.4);
+            cursor: pointer;
+            z-index: 999;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 28px;
+        }
+
+        #aiChatFab:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        #aiChatWindow {
+            position: fixed;
+            bottom: 110px;
+            right: 30px;
+            width: min(400px, 90vw);
+            height: min(600px, 70vh);
+            background: rgba(255, 255, 255, 0.85);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            display: none;
+            flex-direction: column;
+            box-shadow: var(--shadow);
+            z-index: 998;
+            overflow: hidden;
+            animation: chatSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes chatSlideIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        #aiChatWindow.show {
+            display: flex;
+        }
+
+        .chat-header {
+            padding: 18px;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-msg {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.45;
+            word-wrap: break-word;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: #6c5ce7;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg-ai {
+            align-self: flex-start;
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 1px solid var(--ring);
+            border-radius: 12px;
+            padding: 10px;
+            font-family: inherit;
+            resize: none;
+            max-height: 100px;
+        }
+
+        .chat-send-btn {
+            background: #6c5ce7;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0 16px;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -848,6 +969,22 @@
         </div>
     </div>
 
+    <!-- AI Chat Bubble -->
+    <div id="aiChatFab" title="Hỏi đáp cùng AI Tutor">✨</div>
+    <div id="aiChatWindow">
+        <div class="chat-header">
+            <span>✨ AI Tutor - SWT PTIT</span>
+            <button id="closeChatBtn" style="background:transparent; border:none; color:white; font-size:20px; cursor:pointer;">×</button>
+        </div>
+        <div id="chatMessages" class="chat-messages">
+            <div class="chat-msg msg-ai">Chào bạn! Mình là AI Tutor môn SWT. Bạn có thắc mắc gì về bài học hay câu hỏi nào cần giải đáp không? 📚</div>
+        </div>
+        <div class="chat-input-area">
+            <textarea id="chatInput" class="chat-input" placeholder="Nhập câu hỏi..." rows="1"></textarea>
+            <button id="sendChatBtn" class="chat-send-btn">➔</button>
+        </div>
+    </div>
+
     <script>
         const fileInput = document.getElementById("fileInput");
         const modeSelect = document.getElementById("modeSelect");
@@ -861,6 +998,12 @@
         const aiApiKeyInput = document.getElementById("aiApiKey");
         const saveAiKeyBtn = document.getElementById("saveAiKey");
         const closeAiModalBtn = document.getElementById("closeAiModal");
+        const aiChatFab = document.getElementById("aiChatFab");
+        const aiChatWindow = document.getElementById("aiChatWindow");
+        const closeChatBtn = document.getElementById("closeChatBtn");
+        const chatMessages = document.getElementById("chatMessages");
+        const chatInput = document.getElementById("chatInput");
+        const sendChatBtn = document.getElementById("sendChatBtn");
         const statusEl = document.getElementById("status");
         const quizContainer = document.getElementById("quizContainer");
         const summaryEl = document.getElementById("summary");
@@ -1832,6 +1975,85 @@ Trả lời bằng hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng 
 
         saveAiKeyBtn.addEventListener("click", () => {
             saveAiKey(aiApiKeyInput.value.trim());
+        });
+
+        // ===== CHAT BUBBLE LOGIC =====
+        function addChatMessage(role, text) {
+            const div = document.createElement("div");
+            div.className = `chat-msg msg-${role}`;
+            div.innerHTML = text.replace(/\n/g, "<br>");
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendChatToGemini(userText) {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                alert("Vui lòng cài đặt Gemini API Key trong phần ✨ AI.");
+                aiModal.classList.add("show");
+                return null;
+            }
+
+            const prompt = `
+Bạn là một chuyên gia/giảng viên hướng dẫn môn Kiểm thử phần mềm (Software Testing) tại Học viện Công nghệ Bưu chính Viễn thông (PTIT).
+Sinh viên có thắc mắc: "${userText}"
+
+Hãy trả lời một cách súc tích, dễ hiểu, chuyên nghiệp và bám sát kiến thức môn SWT của PTIT.
+Nếu thắc mắc không liên quan đến học tập hoặc môn học, hãy nhắc nhở sinh viên tập trung vào môn học một cách lịch sự.
+Trả lời bằng tiếng Việt, có thể sử dụng markdown đơn giản.
+            `.trim();
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (error) {
+                return "❌ Lỗi: " + error.message;
+            }
+        }
+
+        aiChatFab.addEventListener("click", () => {
+            aiChatWindow.classList.toggle("show");
+        });
+
+        closeChatBtn.addEventListener("click", () => {
+            aiChatWindow.classList.remove("show");
+        });
+
+        async function handleSendChat() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            chatInput.value = "";
+            addChatMessage("user", text);
+
+            const loadingDiv = document.createElement("div");
+            loadingDiv.className = "chat-msg msg-ai";
+            loadingDiv.innerHTML = `<div class="ai-loading"></div> Đang trả lời...`;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            const response = await sendChatToGemini(text);
+            chatMessages.removeChild(loadingDiv);
+
+            if (response) {
+                addChatMessage("ai", response);
+            }
+        }
+
+        sendChatBtn.addEventListener("click", handleSendChat);
+        chatInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendChat();
+            }
         });
 
         // Initialize badge
