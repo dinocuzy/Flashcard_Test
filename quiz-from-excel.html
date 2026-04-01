@@ -124,7 +124,7 @@
 
         .toolbar {
             display: grid;
-            grid-template-columns: 1fr auto auto auto auto auto auto;
+            grid-template-columns: 1fr auto auto auto auto auto auto auto;
             gap: 10px;
             margin-top: 16px;
             align-items: center;
@@ -455,6 +455,40 @@
             color: var(--muted);
         }
 
+        .learning-tools {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .practice-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.75);
+            color: #143560;
+            border: 1px solid var(--ring);
+            border-radius: 12px;
+            padding: 7px 10px;
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .practice-toggle input {
+            accent-color: var(--accent);
+        }
+
+        .learning-stats {
+            background: rgba(255, 255, 255, 0.56);
+            border: 1px solid var(--ring);
+            border-radius: 12px;
+            padding: 7px 10px;
+            font-size: 13px;
+            color: #234365;
+        }
+
         .mt-10 {
             margin-top: 10px;
         }
@@ -481,6 +515,11 @@
 
             .toolbar {
                 grid-template-columns: 1fr;
+            }
+
+            .learning-tools {
+                flex-direction: column;
+                align-items: stretch;
             }
 
             .flash-controls {
@@ -988,6 +1027,15 @@
                 <button id="toggleAnswersBtn" class="btn-outline" disabled>Hiện đáp án</button>
                 <button id="aiSettingsBtn" class="ai-settings-btn" title="Cài đặt AI">✨ AI</button>
             </div>
+            <div class="learning-tools">
+                <label class="practice-toggle" for="practiceModeToggle">
+                    <input id="practiceModeToggle" type="checkbox" />
+                    Luyện tập: chấm ngay từng câu
+                </label>
+                <div id="learningStats" class="learning-stats">Tiến độ: 0/0 câu</div>
+                <div class="tiny">Phím tắt: Ctrl+Enter nộp bài | Alt+A hiện/ẩn đáp án | Flashcard dùng mũi tên trái/phải
+                </div>
+            </div>
             <div id="status" class="status"></div>
             <div class="tiny mt-10">
                 Header khuyến nghị: Câu hỏi gốc | Câu hỏi (Dịch sang tiếng Việt) | Tất cả các option | Câu trả lời gốc |
@@ -1047,6 +1095,8 @@
         const resetTestBtn = document.getElementById("resetTestBtn");
         const toggleAnswersBtn = document.getElementById("toggleAnswersBtn");
         const aiSettingsBtn = document.getElementById("aiSettingsBtn");
+        const practiceModeToggle = document.getElementById("practiceModeToggle");
+        const learningStats = document.getElementById("learningStats");
         const aiModal = document.getElementById("aiModal");
         const aiApiKeyInput = document.getElementById("aiApiKey");
         const saveAiKeyBtn = document.getElementById("saveAiKey");
@@ -1086,7 +1136,11 @@
 
         const SECTION_SIZE = 20;
         const STORAGE_KEY = "quiz-from-excel-cache-v2";
+        const TEST_PROGRESS_PREFIX = "quiz-from-excel-progress-v1";
+        const PRACTICE_MODE_KEY = "quiz-from-excel-practice-mode";
         const DEFAULT_EXCEL_FILE = "FE_SWR.xlsx";
+
+        let practiceMode = localStorage.getItem(PRACTICE_MODE_KEY) === "1";
 
         const HEADER_MAP = {
             originalQuestion: ["Câu hỏi gốc", "Original question", "Question"],
@@ -1304,6 +1358,7 @@
                 sourceFileName,
                 currentSection,
                 mode,
+                practiceMode,
                 quizData: toSerializableQuizData()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -1320,9 +1375,14 @@
 
                 quizData = restored;
                 sourceFileName = parsed.sourceFileName || "cache";
-                mode = parsed.mode === "flashcard" ? "flashcard" : "test";
+                mode = ["test", "flashcard", "game"].includes(parsed.mode) ? parsed.mode : "test";
                 modeSelect.value = mode;
                 currentSection = Number.isInteger(parsed.currentSection) ? parsed.currentSection : 0;
+                if (typeof parsed.practiceMode === "boolean") {
+                    practiceMode = parsed.practiceMode;
+                }
+                practiceModeToggle.checked = practiceMode;
+                localStorage.setItem(PRACTICE_MODE_KEY, practiceMode ? "1" : "0");
 
                 answersVisible = false;
                 flashIndex = 0;
@@ -1338,6 +1398,131 @@
                 localStorage.removeItem(STORAGE_KEY);
                 return false;
             }
+        }
+
+        function getProgressStorageKey() {
+            const source = sourceFileName || "unknown";
+            return TEST_PROGRESS_PREFIX + "::" + source + "::section-" + currentSection;
+        }
+
+        function loadTestProgressForSection() {
+            try {
+                const raw = localStorage.getItem(getProgressStorageKey());
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (_) {
+                return {};
+            }
+        }
+
+        function saveTestProgressFromDom() {
+            if (mode !== "test" || !quizData.length) return;
+            const payload = {};
+            const cards = quizContainer.querySelectorAll(".question-card");
+
+            cards.forEach((card, index) => {
+                const q = getSectionData()[index];
+                if (!q) return;
+
+                const selected = [];
+                card.querySelectorAll(".option input:checked").forEach((input) => {
+                    const opt = input.closest(".option");
+                    const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
+                    if (key) selected.push(key);
+                });
+                payload[String(q.id)] = selected;
+            });
+
+            localStorage.setItem(getProgressStorageKey(), JSON.stringify(payload));
+        }
+
+        function applyProgressToDom() {
+            if (mode !== "test") return;
+            const saved = loadTestProgressForSection();
+            const cards = quizContainer.querySelectorAll(".question-card");
+            const sectionData = getSectionData();
+
+            cards.forEach((card, index) => {
+                const q = sectionData[index];
+                if (!q) return;
+
+                const selected = new Set(saved[String(q.id)] || []);
+                card.querySelectorAll(".option input").forEach((input) => {
+                    const opt = input.closest(".option");
+                    const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
+                    input.checked = selected.has(key);
+                });
+
+                if (practiceMode) {
+                    gradeSingleTestCard(card, q);
+                }
+            });
+        }
+
+        function updateLearningStats() {
+            if (!learningStats) return;
+            const sectionData = getSectionData();
+            const total = sectionData.length;
+            if (!total) {
+                learningStats.textContent = "Tiến độ: 0/0 câu";
+                return;
+            }
+
+            let answered = 0;
+            let correct = 0;
+            const cards = quizContainer.querySelectorAll(".question-card");
+
+            cards.forEach((card, index) => {
+                const q = sectionData[index];
+                if (!q) return;
+
+                const selected = new Set();
+                card.querySelectorAll(".option input:checked").forEach((input) => {
+                    const opt = input.closest(".option");
+                    const key = opt ? (opt.getAttribute("data-key") || input.value) : input.value;
+                    selected.add(key);
+                });
+
+                if (selected.size > 0) {
+                    answered += 1;
+                }
+                if (selected.size > 0 && setsAreEqual(selected, q.answerLabels)) {
+                    correct += 1;
+                }
+            });
+
+            learningStats.textContent = `Tiến độ: ${answered}/${total} câu | Đúng tạm thời: ${correct}`;
+        }
+
+        function gradeSingleTestCard(card, q) {
+            if (!card || !q) return;
+
+            const selected = new Set();
+            const optionEls = card.querySelectorAll(".option");
+
+            optionEls.forEach((optEl) => {
+                optEl.classList.remove("correct", "wrong");
+                const input = optEl.querySelector("input");
+                if (input && input.checked) {
+                    const key = optEl.getAttribute("data-key") || input.value;
+                    selected.add(key);
+                }
+            });
+
+            if (!selected.size) return;
+
+            optionEls.forEach((optEl) => {
+                const key = optEl.getAttribute("data-key");
+                const input = optEl.querySelector("input");
+                const inCorrectSet = q.answerLabels.has(key);
+
+                if (inCorrectSet) {
+                    optEl.classList.add("correct");
+                }
+                if (input && input.checked && !inCorrectSet) {
+                    optEl.classList.add("wrong");
+                }
+            });
         }
 
         function renderTestMode() {
@@ -1387,6 +1572,9 @@
 
                 quizContainer.appendChild(card);
             });
+
+            applyProgressToDom();
+            updateLearningStats();
         }
 
         function renderFlashcardMode() {
@@ -1603,11 +1791,18 @@
 
             // Section select
             sectionSelect.disabled = !hasData;
+            practiceModeToggle.disabled = !hasData || isFlash || isGame;
 
             // Update status based on mode
             if (hasData) {
                 const modeName = isFlash ? "Flashcard" : (isGame ? "Game" : "Test");
                 setStatus("ok", `Chế độ hiện tại: ${modeName}.`);
+            }
+
+            if (mode !== "test") {
+                learningStats.textContent = "Tiến độ: dùng Test mode để theo dõi chi tiết";
+            } else {
+                updateLearningStats();
             }
         }
 
@@ -1617,6 +1812,7 @@
             toggleAnswersBtn.textContent = "Hiện đáp án";
             summaryEl.className = "summary";
             summaryEl.innerHTML = "";
+            localStorage.removeItem(getProgressStorageKey());
             renderTestMode();
             setStatus("ok", "Đã làm mới bài test hiện tại. Bạn có thể làm lại từ đầu.");
         }
@@ -1673,6 +1869,9 @@
         <div>Điểm: <strong>${score}/${total}</strong> (${percent}%)</div>
         <div class="tiny" style="margin-top: 6px;">Màu xanh là lựa chọn đúng, màu đỏ là lựa chọn sai bạn đã tick.</div>
       `;
+
+            saveTestProgressFromDom();
+            updateLearningStats();
         }
 
         function setsAreEqual(a, b) {
@@ -1750,6 +1949,17 @@
             renderByMode();
             saveCache();
             setStatus("ok", "Đã chuyển sang " + sectionSelect.options[currentSection].textContent + ".");
+        });
+
+        practiceModeToggle.checked = practiceMode;
+        practiceModeToggle.addEventListener("change", () => {
+            practiceMode = practiceModeToggle.checked;
+            localStorage.setItem(PRACTICE_MODE_KEY, practiceMode ? "1" : "0");
+            saveCache();
+            if (mode === "test") {
+                renderTestMode();
+            }
+            setStatus("ok", practiceMode ? "Đã bật chế độ luyện tập chấm ngay." : "Đã tắt chế độ luyện tập chấm ngay.");
         });
 
         modeSelect.addEventListener("change", () => {
@@ -1889,6 +2099,53 @@
 
                     gameTimer = setTimeout(nextGameQuestion, 4000);
                 }
+            }
+        });
+
+        quizContainer.addEventListener("change", (e) => {
+            if (mode !== "test") return;
+            const input = e.target.closest(".option input");
+            if (!input) return;
+
+            const card = input.closest(".question-card");
+            if (!card) return;
+            const cardIndex = Array.from(quizContainer.children).indexOf(card);
+            const q = getSectionData()[cardIndex];
+            if (!q) return;
+
+            if (practiceMode) {
+                gradeSingleTestCard(card, q);
+            }
+            saveTestProgressFromDom();
+            updateLearningStats();
+        });
+
+        document.addEventListener("keydown", (e) => {
+            const targetTag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+            const isTyping = targetTag === "input" || targetTag === "textarea";
+            if (isTyping) return;
+
+            if (mode === "test" && e.ctrlKey && e.key === "Enter") {
+                e.preventDefault();
+                evaluateQuiz();
+                return;
+            }
+
+            if (mode === "test" && e.altKey && (e.key === "a" || e.key === "A")) {
+                e.preventDefault();
+                toggleAnswersBtn.click();
+                return;
+            }
+
+            if (mode === "flashcard" && e.key === "ArrowLeft") {
+                e.preventDefault();
+                prevCardBtn.click();
+                return;
+            }
+
+            if (mode === "flashcard" && e.key === "ArrowRight") {
+                e.preventDefault();
+                nextCardBtn.click();
             }
         });
 
@@ -2119,14 +2376,51 @@ Trả lời hoàn toàn bằng TIẾNG VIỆT, trình bày đẹp bằng markdow
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        async function sendChatToGemini(userText) {
-            const prompt = `
-Bạn là một chuyên gia/giảng viên hướng dẫn môn SWR301 (Software Requirements) tại Đại học FPT.
-Sinh viên có thắc mắc: "${userText}"
+        function getLocalTutorReply(userText) {
+            const text = String(userText || "").trim();
+            const lower = text.toLowerCase();
 
-Hãy trả lời một cách súc tích, dễ hiểu, chuyên nghiệp và bám sát kiến thức môn SWR301 của FPT.
-Nếu thắc mắc không liên quan đến học tập hoặc môn học, hãy nhắc nhở sinh viên tập trung vào môn học một cách lịch sự.
-Trả lời bằng tiếng Việt, có thể sử dụng markdown đơn giản.
+            if (!text) return "";
+
+            if (/^(hi|hello|hey|chao|chào)\b/i.test(lower)) {
+                return "Chào bạn. Mình hỗ trợ SWR301 theo kiểu ngắn gọn. Bạn gửi câu hỏi cụ thể hoặc đáp án A/B/C/D để mình trả lời nhanh nhé.";
+            }
+
+            if (text.length <= 2) {
+                return "Bạn gửi thêm nội dung câu hỏi SWR301 cụ thể hơn nhé, ví dụ khái niệm FR/NFR hoặc một câu trắc nghiệm có đủ đáp án.";
+            }
+
+            const asksRequirementType =
+                lower.includes("not a type of requirements") ||
+                lower.includes("không phải là loại yêu cầu") ||
+                lower.includes("khong phai la loai yeu cau");
+
+            const hasOptions = /\b(a\.|b\.|c\.|d\.|a\)|b\)|c\)|d\))\b/i.test(text) || /\n\s*[A-D][.)]/.test(text);
+
+            if (asksRequirementType && !hasOptions) {
+                return "Nếu chưa có lựa chọn A/B/C/D thì chưa chốt đáp án được. Trong SWR301, các nhóm đúng thường là: Business, User, Functional, Non-functional, Constraint. Bạn gửi options để mình chỉ ra đáp án sai ngay.";
+            }
+
+            return "";
+        }
+
+        async function sendChatToGemini(userText) {
+            const localReply = getLocalTutorReply(userText);
+            if (localReply) return localReply;
+
+            const prompt = `
+Bạn là AI Tutor môn SWR301 tại FPT.
+Sinh viên hỏi: "${userText}"
+
+Quy tắc bắt buộc khi trả lời:
+1. Trả lời trực tiếp, ngắn gọn, tối đa 6 dòng hoặc khoảng 120 từ.
+2. Không viết mở đầu dài, không văn phong diễn thuyết, không lặp lại định nghĩa lan man.
+3. Nếu thiếu dữ kiện để chốt đáp án thì chỉ hỏi lại đúng 1 câu ngắn để lấy dữ kiện thiếu.
+4. Nếu là câu trắc nghiệm nhưng chưa có các lựa chọn, yêu cầu sinh viên gửi options A/B/C/D.
+5. Ưu tiên cấu trúc: Kết luận ngắn -> Lý do chính (1-3 ý) -> Gợi ý bước tiếp theo (1 câu).
+6. Bám sát SWR301: FR, NFR, elicitation, use case, user story, SRS, traceability, validation/verification.
+
+Trả lời bằng tiếng Việt, markdown đơn giản.
             `.trim();
 
             const result = await callGemini(prompt, ["gemini-2.5-flash", "gemini-2.0-flash"]);
