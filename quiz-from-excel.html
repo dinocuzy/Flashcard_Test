@@ -1508,6 +1508,12 @@
         function parseAnswerLabels(answerText, options) {
             const labels = new Set();
             const lines = splitLines(answerText);
+            const availableLabels = new Set(
+                (options || [])
+                    .map((opt) => extractLabel(opt))
+                    .filter(Boolean)
+                    .map((label) => label.toUpperCase())
+            );
 
             const optionByText = new Map();
             (options || []).forEach((opt) => {
@@ -1543,6 +1549,15 @@
                     const matched = optionByText.get(candidateNorm);
                     if (matched) {
                         labels.add(matched);
+                    }
+                });
+
+                // Handle answers like "A and C", "A/C", "A và C", "A C"
+                const letterMatches = String(line).match(/\b([A-Za-z])\b/g) || [];
+                letterMatches.forEach((token) => {
+                    const up = String(token).toUpperCase();
+                    if (availableLabels.has(up)) {
+                        labels.add(up);
                     }
                 });
             }
@@ -2086,6 +2101,8 @@
 
             const selected = new Set();
             const optionEls = card.querySelectorAll(".option");
+            const isMulti = q.answerLabels.size > 1;
+            const required = q.answerLabels.size;
 
             optionEls.forEach((optEl) => {
                 optEl.classList.remove("correct", "wrong");
@@ -2097,6 +2114,18 @@
             });
 
             if (!selected.size) return;
+
+            // Multi-answer questions: do not reveal all correct answers before enough selections.
+            if (isMulti && selected.size < required) {
+                optionEls.forEach((optEl) => {
+                    const input = optEl.querySelector("input");
+                    if (input && input.checked) {
+                        optEl.classList.add("selected");
+                    }
+                });
+                updateMultiSelectionUi(card, q, selected);
+                return;
+            }
 
             optionEls.forEach((optEl) => {
                 const key = optEl.getAttribute("data-key");
